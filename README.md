@@ -10,18 +10,18 @@
 - [x] PostgreSQL + pgvector storage for chunks/embeddings + relational entities
 - [x] Docker Compose stack: `db`, `redis`, `backend`, `worker`, `frontend`
 - [x] CPU-only PyTorch in Docker (no NVIDIA/CUDA required)
-- [x] LangGraph RAG pipeline: load memory → embed query → project-scoped cosine retrieval → re-rank → multi-doc aggregation → generate → citations → save memory
+- [x] LangGraph RAG pipeline: load memory → embed query → project-scoped cosine retrieval → multi-doc aggregation → generate → citations → save memory
 - [x] Chat API + history (`/api/projects/{id}/chat/*`)
 - [x] Next.js UI (auth, projects, upload/status, chat with citations)
 - [x] Dark theme support (default: light) with UI toggle
 - [x] Home route redirect: `/` → `/login` if unauthenticated, otherwise `/projects`
+- [x] Stream chat responses (SSE) for token-by-token UX (`POST /api/projects/{id}/chat/stream/`)
 - [x] Upload fixes:
   - [x] Increased `Document.file` max length (avoids `SuspiciousFileOperation`)
   - [x] Fixed tokenizer selection for chunking (`encoding_name="cl100k_base"`)
 
 ### Remaining
 
-- [ ] Stream chat responses (SSE/WebSocket) for token-by-token UX
 - [ ] Better citation precision (character offsets, snippet highlighting, stronger page mapping)
 - [ ] Access token refresh handling in frontend (auto refresh on 401)
 - [ ] Background job monitoring UI (ingestion progress + retry controls)
@@ -64,7 +64,7 @@ The system is expected to reduce research time, improve trust in AI outputs, enh
 This project combines retrieval and generative AI to address challenges in academic research, ensuring outputs are grounded in real sources and improving both efficiency and reliability.
 
 
-Django REST API, Celery workers, PostgreSQL + pgvector, and a Next.js UI for project-scoped document chat with retrieval, cross-encoder re-ranking, and citations.
+Django REST API, Celery workers, PostgreSQL + pgvector, and a Next.js UI for project-scoped document chat with retrieval and citations.
 
 ## Prerequisites
 
@@ -80,7 +80,7 @@ Django REST API, Celery workers, PostgreSQL + pgvector, and a Next.js UI for pro
    cp frontend/.env.local.example frontend/.env.local
    ```
 
-2. Set `OPENAI_API_KEY` in `.env` for chat answers (embeddings and re-ranking use local `sentence-transformers` models on first run).
+2. Set `OPENAI_API_KEY` in `.env` for chat answers (embeddings use local `sentence-transformers` models on first run).
 
 3. Start the stack:
 
@@ -116,7 +116,8 @@ Django REST API, Celery workers, PostgreSQL + pgvector, and a Next.js UI for pro
 | GET/PATCH/DELETE | `/api/projects/{id}/` | Project detail |
 | GET/POST | `/api/projects/{id}/documents/` | List / upload PDF or DOCX |
 | GET/DELETE | `/api/projects/{id}/documents/{doc_id}/` | Document detail / delete |
-| POST | `/api/projects/{id}/chat/` | `{ "message": "..." }` — LangGraph RAG pipeline |
+| POST | `/api/projects/{id}/chat/` | `{ "message": "..." }` — LangGraph RAG pipeline (JSON response) |
+| POST | `/api/projects/{id}/chat/stream/` | Same body — **SSE** stream (`status` → `token` → `done`) |
 | GET | `/api/projects/{id}/chat/messages/` | Chat history |
 
 All project routes require `Authorization: Bearer <access>`.
@@ -127,11 +128,12 @@ Key variables in `.env`:
 
 - `DATABASE_URL` — overridden in Compose to point at the `db` service
 - `EMBEDDING_DIMENSION` — must match the embedding model (384 for `all-MiniLM-L6-v2`)
-- `RETRIEVE_TOP_K`, `RERANK_TOP_K` — retrieval and re-rank sizes
+- `RETRIEVE_TOP_K` — retrieval size
 - `CORS_ALLOWED_ORIGINS` — include your Next.js origin
 
 ## Architecture
 
 - **Ingestion**: Celery task chunks PDF/DOCX, embeds with sentence-transformers, stores rows in `DocumentChunk` with pgvector.
-- **Query**: LangGraph nodes — load memory → embed query → project-filtered ANN-style cosine retrieval → cross-encoder re-rank → multi-document context → OpenAI chat → citation list → persist messages.
+- **Query**: LangGraph nodes — load memory → embed query → project-filtered cosine retrieval → multi-document context → OpenAI chat → citation list → persist messages.
+- **Streaming chat**: `POST /api/projects/{id}/chat/stream/` returns **SSE** (`text/event-stream`): `status` (pipeline stage) → `token` (answer deltas) → `done` (full answer, citations, saved `message_id`). The Next.js UI uses `fetch` + `ReadableStream` (not `EventSource`) so JWT and JSON body work cleanly.
 

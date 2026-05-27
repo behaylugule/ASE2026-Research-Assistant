@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.chat.views import ChatMessageListView, ChatView
+from apps.chat.views import ChatMessageListView, ChatStreamView, ChatView
 from apps.documents.views import DocumentDetailView, DocumentListCreateView
 
 from .views import ProjectDetailView, ProjectListCreateView
@@ -22,6 +22,11 @@ urlpatterns = [
         "projects/<uuid:project_id>/chat/",
         ChatView.as_view(),
         name="project-chat",
+    ),
+    path(
+        "projects/<uuid:project_id>/chat/stream/",
+        ChatStreamView.as_view(),
+        name="project-chat-stream",
     ),
     path(
         "projects/<uuid:project_id>/chat/messages/",

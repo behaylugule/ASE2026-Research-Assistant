@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArxivTopBar } from "@/components/ArxivTopBar";
 import { apiJson, getAccessToken, uploadDocument } from "@/lib/api";
+import { chatStageLabel, streamProjectChat, type ChatCitation } from "@/lib/chat-stream";
 
 type ProjectRow = {
   id: string;
@@ -23,12 +24,7 @@ type DocumentRow = {
   updated_at: string;
 };
 
-type Citation = {
-  label?: string;
-  document_name?: string;
-  page_number?: number | null;
-  chunk_id?: string;
-};
+type Citation = ChatCitation;
 
 type ChatMessage = {
   id: string;
@@ -89,6 +85,10 @@ export default function ProjectDetailPage() {
   const [chatInput, setChatInput] = useState("");
   const [chatError, setChatError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [streamDraft, setStreamDraft] = useState<{ content: string; stage: string; citations: Citation[] } | null>(
+    null,
+  );
+  const chatAbortRef = useRef<AbortController | null>(null);
   const [uploading, setUploading] = useState(false);
   const [docTab, setDocTab] = useState<"all" | "pdf" | "docx">("all");
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
@@ -156,7 +156,13 @@ export default function ProjectDetailPage() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length, sending]);
+  }, [messages.length, sending, streamDraft?.content, streamDraft?.stage]);
+
+  useEffect(() => {
+    return () => {
+      chatAbortRef.current?.abort();
+    };
+  }, []);
 
   const filteredDocs = docs.filter((d) => {
     if (docTab === "all") return true;
@@ -209,16 +215,64 @@ export default function ProjectDetailPage() {
     setChatError(null);
     setSending(true);
     setChatInput("");
+
+    const optimisticUser: ChatMessage = {
+      id: `tmp-user-${Date.now()}`,
+      role: "user",
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, optimisticUser]);
+    setStreamDraft({ content: "", stage: "memory", citations: [] });
+
+    chatAbortRef.current?.abort();
+    const controller = new AbortController();
+    chatAbortRef.current = controller;
+
     try {
-      await apiJson(`/api/projects/${id}/chat/`, {
-        method: "POST",
-        json: { message: text },
-      });
+      await streamProjectChat(
+        id,
+        text,
+        {
+          onStatus: (stage) => {
+            setStreamDraft((prev) => (prev ? { ...prev, stage } : prev));
+          },
+          onToken: (content) => {
+            setStreamDraft((prev) => (prev ? { ...prev, content: prev.content + content } : prev));
+          },
+          onDone: (payload) => {
+            if (payload.error) {
+              setChatError(payload.error);
+            }
+            setStreamDraft((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    content: payload.answer || prev.content,
+                    citations: payload.citations,
+                    stage: "done",
+                  }
+                : prev,
+            );
+          },
+          onError: (detail) => {
+            setChatError(detail);
+          },
+        },
+        controller.signal,
+      );
       await refreshMessages();
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticUser.id));
+        return;
+      }
       setChatError(err instanceof Error ? err.message : "Chat failed");
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticUser.id));
     } finally {
+      setStreamDraft(null);
       setSending(false);
+      chatAbortRef.current = null;
     }
   }
 
@@ -422,7 +476,7 @@ export default function ProjectDetailPage() {
           <div className="mock-ws-chat">
             <div className="mock-chat-hdr">
               <span>Chat</span>
-              <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--color-text-muted)", marginLeft: "auto" }}>top-k 10 · rerank 3</span>
+              <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--color-text-muted)", marginLeft: "auto" }}>top-k 10</span>
             </div>
 
             <div className="mock-msgs">
@@ -468,16 +522,37 @@ export default function ProjectDetailPage() {
                 ),
               )}
 
-              {sending ? (
+              {sending && streamDraft ? (
                 <div className="mock-msg">
                   <div className="mock-mav ai">A</div>
                   <div className="mock-mbody">
-                    <div className="mock-mmeta">Arxiv · retrieving…</div>
-                    <div className="mock-thinker">
-                      <div className="mock-td" />
-                      <div className="mock-td" />
-                      <div className="mock-td" />
+                    <div className="mock-mmeta">
+                      Arxiv · {chatStageLabel(streamDraft.stage)}
+                      {streamDraft.citations.length > 0 ? ` · ${streamDraft.citations.length} sources` : ""}
                     </div>
+                    {streamDraft.content ? (
+                      <div className="mock-bub ai">{streamDraft.content}</div>
+                    ) : (
+                      <div className="mock-thinker">
+                        <div className="mock-td" />
+                        <div className="mock-td" />
+                        <div className="mock-td" />
+                      </div>
+                    )}
+                    {streamDraft.citations.length > 0 ? (
+                      <div className="mock-cites">
+                        {streamDraft.citations.map((c, i) => (
+                          <div key={i} className="mock-cite">
+                            <div className="mock-cnum">{i + 1}</div>
+                            <div>
+                              <div className="mock-cdoc">{c.document_name ?? "Document"}</div>
+                              <div className="mock-csnip">{c.label ?? ""}</div>
+                              <div className="mock-cpg">{c.page_number != null ? `p. ${c.page_number}` : "p. n/a"}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
