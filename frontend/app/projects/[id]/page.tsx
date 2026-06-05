@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArxivTopBar } from "@/components/ArxivTopBar";
 import { apiJson, getAccessToken, uploadDocument } from "@/lib/api";
-import { chatStageLabel, streamProjectChat, type ChatCitation } from "@/lib/chat-stream";
+import { chatStageLabel, formatLatencySummary, streamProjectChat, type ChatCitation, type ChatLatencyMs, type ChatMode } from "@/lib/chat-stream";
 
 type ProjectRow = {
   id: string;
@@ -85,9 +85,14 @@ export default function ProjectDetailPage() {
   const [chatInput, setChatInput] = useState("");
   const [chatError, setChatError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
-  const [streamDraft, setStreamDraft] = useState<{ content: string; stage: string; citations: Citation[] } | null>(
-    null,
-  );
+  const [chatMode, setChatMode] = useState<ChatMode>("fast");
+  const [streamDraft, setStreamDraft] = useState<{
+    content: string;
+    stage: string;
+    statusMessage?: string;
+    citations: Citation[];
+    latencyMs?: ChatLatencyMs;
+  } | null>(null);
   const chatAbortRef = useRef<AbortController | null>(null);
   const [uploading, setUploading] = useState(false);
   const [docTab, setDocTab] = useState<"all" | "pdf" | "docx">("all");
@@ -209,6 +214,10 @@ export default function ProjectDetailPage() {
     e.preventDefault();
   }
 
+  function stopChatMessage() {
+    chatAbortRef.current?.abort();
+  }
+
   async function sendChatMessage() {
     const text = chatInput.trim();
     if (!text || sending) return;
@@ -234,8 +243,8 @@ export default function ProjectDetailPage() {
         id,
         text,
         {
-          onStatus: (stage) => {
-            setStreamDraft((prev) => (prev ? { ...prev, stage } : prev));
+          onStatus: (stage, message) => {
+            setStreamDraft((prev) => (prev ? { ...prev, stage, statusMessage: message } : prev));
           },
           onToken: (content) => {
             setStreamDraft((prev) => (prev ? { ...prev, content: prev.content + content } : prev));
@@ -250,6 +259,7 @@ export default function ProjectDetailPage() {
                     ...prev,
                     content: payload.answer || prev.content,
                     citations: payload.citations,
+                    latencyMs: payload.latency_ms,
                     stage: "done",
                   }
                 : prev,
@@ -259,7 +269,7 @@ export default function ProjectDetailPage() {
             setChatError(detail);
           },
         },
-        controller.signal,
+        { signal: controller.signal, mode: chatMode },
       );
       await refreshMessages();
     } catch (err) {
@@ -476,7 +486,29 @@ export default function ProjectDetailPage() {
           <div className="mock-ws-chat">
             <div className="mock-chat-hdr">
               <span>Chat</span>
-              <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--color-text-muted)", marginLeft: "auto" }}>top-k 10</span>
+              <div className="mock-set-nav" style={{ marginLeft: "auto", marginRight: 8 }}>
+                <button
+                  type="button"
+                  className={chatMode === "fast" ? "is-on" : ""}
+                  onClick={() => setChatMode("fast")}
+                  disabled={sending}
+                  title="Fast mode: fewer chunks, lower latency"
+                >
+                  Fast
+                </button>
+                <button
+                  type="button"
+                  className={chatMode === "deep" ? "is-on" : ""}
+                  onClick={() => setChatMode("deep")}
+                  disabled={sending}
+                  title="Deep mode: more context, slower"
+                >
+                  Deep
+                </button>
+              </div>
+              <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--color-text-muted)" }}>
+                {chatMode === "fast" ? "top-k 3" : "top-k 10"}
+              </span>
             </div>
 
             <div className="mock-msgs">
@@ -527,8 +559,9 @@ export default function ProjectDetailPage() {
                   <div className="mock-mav ai">A</div>
                   <div className="mock-mbody">
                     <div className="mock-mmeta">
-                      Arxiv · {chatStageLabel(streamDraft.stage)}
+                      Arxiv · {chatStageLabel(streamDraft.stage, streamDraft.statusMessage)}
                       {streamDraft.citations.length > 0 ? ` · ${streamDraft.citations.length} sources` : ""}
+                      {streamDraft.latencyMs ? ` · ${formatLatencySummary(streamDraft.latencyMs)}` : ""}
                     </div>
                     {streamDraft.content ? (
                       <div className="mock-bub ai">{streamDraft.content}</div>
@@ -574,6 +607,11 @@ export default function ProjectDetailPage() {
                   onKeyDown={onComposerKeyDown}
                   disabled={sending}
                 />
+                {sending ? (
+                  <button type="button" className="mock-btn-ghost" style={{ flexShrink: 0, padding: "6px 10px" }} onClick={stopChatMessage}>
+                    Stop
+                  </button>
+                ) : null}
                 <button type="button" className="mock-snd" aria-label="Send" disabled={sending || !chatInput.trim()} onClick={() => void sendChatMessage()}>
                   <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="2" y1="14" x2="14" y2="2" />

@@ -1,7 +1,7 @@
 
 ## Task list (status)
 
-### Completed
+### Completed — core platform
 
 - [x] Django backend (DRF) with JWT auth (`/api/auth/*`)
 - [x] Project CRUD (`/api/projects/*`) with per-user project isolation
@@ -15,25 +15,45 @@
 - [x] Next.js UI (auth, projects, upload/status, chat with citations)
 - [x] Dark theme support (default: light) with UI toggle
 - [x] Home route redirect: `/` → `/login` if unauthenticated, otherwise `/projects`
-- [x] Stream chat responses (SSE) for token-by-token UX (`POST /api/projects/{id}/chat/stream/`)
 - [x] Upload fixes:
   - [x] Increased `Document.file` max length (avoids `SuspiciousFileOperation`)
   - [x] Fixed tokenizer selection for chunking (`encoding_name="cl100k_base"`)
+
+### Completed — real-time interaction (project focus)
+
+Professor feedback: optimize for **fast, interactive research chat** instead of slow “wait for perfect answer” UX.
+
+- [x] **SSE streaming chat** — token-by-token answers (`POST /api/projects/{id}/chat/stream/`)
+- [x] **Removed rerank step** — lower latency, no cross-encoder cost
+- [x] **Fast vs Deep chat modes** — `{ "mode": "fast" | "deep" }` on chat endpoints
+  - Fast: `FAST_RETRIEVE_TOP_K=3`, shorter history (`FAST_CHAT_HISTORY_LIMIT=6`)
+  - Deep: `DEEP_RETRIEVE_TOP_K=10`, full history (`CHAT_HISTORY_LIMIT=20`)
+- [x] **Latency metrics in SSE `done` event** — `ttft`, `pregenerate`, `total` (milliseconds)
+- [x] **Rich status messages** during pipeline (`Found N excerpts…`, etc.)
+- [x] **UI: Fast/Deep toggle**, live stage text, latency summary, **Stop** button (abort stream)
+- [x] **HNSW pgvector index** on `DocumentChunk.embedding` (migration `0002_hnsw_embedding_index`)
+- [x] **Embedding model warm-up** on backend startup (reduces first-query cold start)
 
 ### Remaining
 
 - [ ] Better citation precision (character offsets, snippet highlighting, stronger page mapping)
 - [ ] Access token refresh handling in frontend (auto refresh on 401)
 - [ ] Background job monitoring UI (ingestion progress + retry controls)
-- [ ] Vector index tuning (HNSW/IVFFlat indexing, performance tuning for large corpora)
+- [ ] Citation click → scroll/highlight source excerpt in document panel
+- [ ] Optional two-phase answer (fast draft → deep refine on demand)
+- [ ] Demo/evaluation page: compare Fast vs Deep latency and quality side-by-side
 
 
 
-# ASE2026 — AI-Powered Academic Research Assistant
+# ASE2026 — Real-Time Academic Research Assistant
 
 ### Title
 
-AI-Powered Academic Research Assistant with Scalable System Architecture (RAG-Based Platform)
+Real-Time Interactive Academic Research Assistant with RAG and Citations
+
+### Project angle
+
+Most research assistants optimize for answer quality at the cost of speed. This project optimizes for **time-to-first-response** and **continuous conversation flow**: users get immediate pipeline feedback, streaming tokens, and a **Fast mode** for low-latency interaction while researching.
 
 ### 1. Introduction
 
@@ -64,7 +84,7 @@ The system is expected to reduce research time, improve trust in AI outputs, enh
 This project combines retrieval and generative AI to address challenges in academic research, ensuring outputs are grounded in real sources and improving both efficiency and reliability.
 
 
-Django REST API, Celery workers, PostgreSQL + pgvector, and a Next.js UI for project-scoped document chat with retrieval and citations.
+Django REST API, Celery workers, PostgreSQL + pgvector, and a Next.js UI for project-scoped document chat with retrieval, streaming, and citations.
 
 ## Prerequisites
 
@@ -116,7 +136,7 @@ Django REST API, Celery workers, PostgreSQL + pgvector, and a Next.js UI for pro
 | GET/PATCH/DELETE | `/api/projects/{id}/` | Project detail |
 | GET/POST | `/api/projects/{id}/documents/` | List / upload PDF or DOCX |
 | GET/DELETE | `/api/projects/{id}/documents/{doc_id}/` | Document detail / delete |
-| POST | `/api/projects/{id}/chat/` | `{ "message": "..." }` — LangGraph RAG pipeline (JSON response) |
+| POST | `/api/projects/{id}/chat/` | `{ "message": "...", "mode": "fast" \| "deep" }` — JSON response |
 | POST | `/api/projects/{id}/chat/stream/` | Same body — **SSE** stream (`status` → `token` → `done`) |
 | GET | `/api/projects/{id}/chat/messages/` | Chat history |
 
@@ -128,12 +148,23 @@ Key variables in `.env`:
 
 - `DATABASE_URL` — overridden in Compose to point at the `db` service
 - `EMBEDDING_DIMENSION` — must match the embedding model (384 for `all-MiniLM-L6-v2`)
-- `RETRIEVE_TOP_K` — retrieval size
+- `DEFAULT_CHAT_MODE` — default chat mode (`fast` or `deep`)
+- `FAST_RETRIEVE_TOP_K` / `DEEP_RETRIEVE_TOP_K` — retrieval sizes per mode
+- `FAST_CHAT_HISTORY_LIMIT` / `CHAT_HISTORY_LIMIT` — history window per mode
+- `OPENAI_CHAT_MODEL` / `OPENAI_CHAT_MODEL_FAST` — LLM per mode (can be the same model)
 - `CORS_ALLOWED_ORIGINS` — include your Next.js origin
 
 ## Architecture
 
-- **Ingestion**: Celery task chunks PDF/DOCX, embeds with sentence-transformers, stores rows in `DocumentChunk` with pgvector.
+- **Ingestion**: Celery task chunks PDF/DOCX, embeds with sentence-transformers, stores rows in `DocumentChunk` with pgvector (HNSW cosine index).
 - **Query**: LangGraph nodes — load memory → embed query → project-filtered cosine retrieval → multi-document context → OpenAI chat → citation list → persist messages.
-- **Streaming chat**: `POST /api/projects/{id}/chat/stream/` returns **SSE** (`text/event-stream`): `status` (pipeline stage) → `token` (answer deltas) → `done` (full answer, citations, saved `message_id`). The Next.js UI uses `fetch` + `ReadableStream` (not `EventSource`) so JWT and JSON body work cleanly.
+- **Streaming chat**: `POST /api/projects/{id}/chat/stream/` returns **SSE** (`text/event-stream`): `status` (pipeline stage + message) → `token` (answer deltas) → `done` (full answer, citations, `message_id`, `latency_ms`). The Next.js UI uses `fetch` + `ReadableStream` (not `EventSource`) so JWT and JSON body work cleanly.
+- **Fast mode**: fewer chunks + shorter history for lower time-to-first-token; **Deep mode**: more context for thorough answers.
 
+## Demo script (for presentation)
+
+1. Upload 2 PDFs and wait until indexed.
+2. Select **Fast** mode → ask a question → point out status messages + streaming tokens + latency (`first token … · total …`).
+3. Ask a follow-up immediately (show conversation flow).
+4. Switch to **Deep** mode → ask a harder question → compare latency vs quality.
+5. Show citations tied to uploaded documents.

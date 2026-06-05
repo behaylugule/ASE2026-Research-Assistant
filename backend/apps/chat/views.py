@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.projects.permissions import ProjectMemberPermission, get_user_project
+from apps.rag.config import normalize_mode
 from apps.rag.graph import iter_research_graph_stream, run_research_graph
 from apps.rag.sse import sse_event
 
@@ -12,11 +13,12 @@ from .models import ChatMessage
 from .serializers import ChatMessageSerializer
 
 
-def _chat_event_stream(project_id, user_id, message: str):
+def _chat_event_stream(project_id, user_id, message: str, mode: str):
     for payload in iter_research_graph_stream(
         project_id=project_id,
         user_id=user_id,
         query=message,
+        mode=mode,
     ):
         event_type = payload.get("type", "message")
         yield sse_event(str(event_type), payload)
@@ -54,10 +56,12 @@ class ChatView(APIView):
         if not project:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        mode = normalize_mode(request.data.get("mode"))
         result = run_research_graph(
             project_id=str(project.id),
             user_id=request.user.id,
             query=message,
+            mode=mode,
         )
         return Response(
             {
@@ -65,6 +69,7 @@ class ChatView(APIView):
                 "citations": result.get("citations", []),
                 "message_id": result.get("assistant_message_id"),
                 "error": result.get("error"),
+                "mode": mode,
             },
             status=status.HTTP_200_OK,
         )
@@ -87,8 +92,9 @@ class ChatStreamView(APIView):
         if not project:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
+        mode = normalize_mode(request.data.get("mode"))
         response = StreamingHttpResponse(
-            _chat_event_stream(str(project.id), request.user.id, message),
+            _chat_event_stream(str(project.id), request.user.id, message, mode),
             content_type="text/event-stream; charset=utf-8",
         )
         response["Cache-Control"] = "no-cache, no-transform"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import Iterator
 from typing import Any, TypedDict
 from uuid import UUID
@@ -13,6 +14,12 @@ from langgraph.graph import END, START, StateGraph
 
 from apps.chat.models import ChatMessage, ChatRole
 from apps.projects.models import Project
+from apps.rag.config import (
+    chat_history_limit_for_mode,
+    chat_model_for_mode,
+    normalize_mode,
+    retrieve_top_k_for_mode,
+)
 from apps.rag.llm import generate_with_context, stream_generate_with_context
 from apps.rag.retrieval import retrieve_chunks
 from apps.rag.services.embeddings import embed_query
@@ -24,6 +31,7 @@ class RAGState(TypedDict, total=False):
     project_id: str
     user_id: int
     query: str
+    mode: str
     chat_history: list[dict]
     query_embedding: list[float]
     retrieved_chunks: list[dict]
@@ -37,7 +45,8 @@ class RAGState(TypedDict, total=False):
 
 def _load_memory(state: RAGState) -> dict:
     pid = state["project_id"]
-    limit = settings.CHAT_HISTORY_LIMIT
+    mode = normalize_mode(state.get("mode"))
+    limit = chat_history_limit_for_mode(mode)
     qs = ChatMessage.objects.filter(project_id=pid).order_by("-created_at")[:limit]
     msgs = list(reversed(list(qs)))
     history = [{"role": m.role, "content": m.content} for m in msgs]
@@ -45,15 +54,20 @@ def _load_memory(state: RAGState) -> dict:
 
 
 def _embed_query(state: RAGState) -> dict:
-    vec = embed_query(state["query"])
+    from apps.rag.query_enhance import enhance_query_for_retrieval
+
+    vec = embed_query(enhance_query_for_retrieval(state["query"]))
     return {"query_embedding": vec}
 
 
 def _retrieve(state: RAGState) -> dict:
+    mode = normalize_mode(state.get("mode"))
+    k = retrieve_top_k_for_mode(mode)
     chunks = retrieve_chunks(
         state["project_id"],
         state["query_embedding"],
-        limit=settings.RETRIEVE_TOP_K,
+        limit=k,
+        query=state.get("query"),
     )
     return {"retrieved_chunks": chunks}
 
@@ -92,6 +106,7 @@ def _generate(state: RAGState) -> dict:
             context=state.get("context_text") or "",
             query=state["query"],
             chat_history=state.get("chat_history") or [],
+            model=chat_model_for_mode(state.get("mode")),
         )
         return {"final_answer": answer}
     except Exception as exc:
@@ -120,8 +135,16 @@ def _build_citations(chunks: list[dict]) -> list[dict]:
     return out
 
 
+def _is_not_found_answer(answer: str) -> bool:
+    normalized = " ".join(answer.strip().lower().split())
+    return "not found in the provided documents" in normalized
+
+
 def _format_citations(state: RAGState) -> dict:
+    answer = (state.get("final_answer") or "").strip()
     chunks = state.get("selected_chunks") or []
+    if not chunks or _is_not_found_answer(answer):
+        return {"citations": []}
     return {"citations": _build_citations(chunks)}
 
 
@@ -175,11 +198,12 @@ def get_compiled_graph():
     return _compiled
 
 
-def run_research_graph(*, project_id: str | UUID, user_id: int, query: str) -> dict:
+def run_research_graph(*, project_id: str | UUID, user_id: int, query: str, mode: str = "fast") -> dict:
     initial: RAGState = {
         "project_id": str(project_id),
         "user_id": user_id,
         "query": query.strip(),
+        "mode": normalize_mode(mode),
     }
     graph = get_compiled_graph()
     final = graph.invoke(initial)
@@ -202,36 +226,52 @@ def iter_research_graph_stream(
     project_id: str | UUID,
     user_id: int,
     query: str,
+    mode: str = "fast",
 ) -> Iterator[dict[str, Any]]:
     """
     Run the RAG pipeline and yield structured events for SSE:
-    - {"type": "status", "stage": "..."}
+    - {"type": "status", "stage": "...", "message": "..."}
     - {"type": "token", "content": "..."}
-    - {"type": "done", "answer", "citations", "message_id", "error"}
+    - {"type": "done", "answer", "citations", "message_id", "latency_ms", "error"}
     """
     state: RAGState = {
         "project_id": str(project_id),
         "user_id": user_id,
         "query": query.strip(),
+        "mode": normalize_mode(mode),
     }
+    started = time.perf_counter()
+    ttft_ms: float | None = None
+    pregenerate_ms: float | None = None
 
     try:
-        yield {"type": "status", "stage": "memory"}
+        yield {"type": "status", "stage": "memory", "message": "Loading recent chat…"}
         state = _merge_state(state, _load_memory(state))
 
-        yield {"type": "status", "stage": "embed"}
+        yield {"type": "status", "stage": "embed", "message": "Embedding your question…"}
         state = _merge_state(state, _embed_query(state))
 
-        yield {"type": "status", "stage": "retrieve"}
+        top_k = retrieve_top_k_for_mode(state.get("mode"))
+        yield {
+            "type": "status",
+            "stage": "retrieve",
+            "message": f"Searching top {top_k} excerpts ({state.get('mode', 'fast')} mode)…",
+        }
         state = _merge_state(state, _retrieve(state))
 
-        yield {"type": "status", "stage": "select"}
+        chunks = state.get("retrieved_chunks") or []
+        yield {
+            "type": "status",
+            "stage": "select",
+            "message": f"Found {len(chunks)} relevant excerpt{'s' if len(chunks) != 1 else ''}…",
+        }
         state = _merge_state(state, _select_chunks(state))
 
-        yield {"type": "status", "stage": "aggregate"}
+        yield {"type": "status", "stage": "aggregate", "message": "Building answer context…"}
         state = _merge_state(state, _aggregate_multidoc(state))
 
-        yield {"type": "status", "stage": "generate"}
+        pregenerate_ms = round((time.perf_counter() - started) * 1000, 1)
+        yield {"type": "status", "stage": "generate", "message": "Generating answer…"}
         if not settings.OPENAI_API_KEY:
             state = _merge_state(
                 state,
@@ -243,11 +283,15 @@ def iter_research_graph_stream(
         else:
             parts: list[str] = []
             try:
+                chat_model = chat_model_for_mode(state.get("mode"))
                 for delta in stream_generate_with_context(
                     context=state.get("context_text") or "",
                     query=state["query"],
                     chat_history=state.get("chat_history") or [],
+                    model=chat_model,
                 ):
+                    if ttft_ms is None:
+                        ttft_ms = round((time.perf_counter() - started) * 1000, 1)
                     parts.append(delta)
                     yield {"type": "token", "content": delta}
                 state = _merge_state(state, {"final_answer": "".join(parts)})
@@ -263,14 +307,21 @@ def iter_research_graph_stream(
 
         state = _merge_state(state, _format_citations(state))
 
-        yield {"type": "status", "stage": "save"}
+        yield {"type": "status", "stage": "save", "message": "Saving conversation…"}
         state = _merge_state(state, _save_memory(state))
 
+        total_ms = round((time.perf_counter() - started) * 1000, 1)
         yield {
             "type": "done",
             "answer": state.get("final_answer", ""),
             "citations": state.get("citations", []),
             "message_id": state.get("assistant_message_id"),
+            "mode": state.get("mode", "fast"),
+            "latency_ms": {
+                "ttft": ttft_ms,
+                "pregenerate": pregenerate_ms,
+                "total": total_ms,
+            },
             "error": state.get("error"),
         }
     except Exception as exc:
