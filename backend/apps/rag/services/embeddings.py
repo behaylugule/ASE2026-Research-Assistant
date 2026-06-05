@@ -19,3 +19,8 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
 
 def embed_query(text: str) -> list[float]:
     return embed_texts([text])[0]
+
+
+def warm_embedding_model() -> None:
+    """Load the embedding model at startup to avoid cold-start latency on first chat."""
+    _embedding_model()

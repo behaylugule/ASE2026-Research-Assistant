@@ -2,6 +2,8 @@ import { getAccessToken } from "@/lib/api";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+export type ChatMode = "fast" | "deep";
+
 export type ChatCitation = {
   label?: string;
   document_name?: string;
@@ -9,13 +11,21 @@ export type ChatCitation = {
   chunk_id?: string;
 };
 
+export type ChatLatencyMs = {
+  ttft?: number | null;
+  pregenerate?: number | null;
+  total?: number | null;
+};
+
 export type ChatStreamHandlers = {
-  onStatus?: (stage: string) => void;
+  onStatus?: (stage: string, message?: string) => void;
   onToken?: (content: string) => void;
   onDone?: (payload: {
     answer: string;
     citations: ChatCitation[];
     message_id?: string;
+    mode?: ChatMode;
+    latency_ms?: ChatLatencyMs;
     error?: string | null;
   }) => void;
   onError?: (detail: string) => void;
@@ -40,7 +50,10 @@ function parseSseBlock(block: string): { event: string; data: string } | null {
 function dispatchPayload(payload: Record<string, unknown>, handlers: ChatStreamHandlers) {
   const type = payload.type as string | undefined;
   if (type === "status" && typeof payload.stage === "string") {
-    handlers.onStatus?.(payload.stage);
+    handlers.onStatus?.(
+      payload.stage,
+      typeof payload.message === "string" ? payload.message : undefined,
+    );
     return;
   }
   if (type === "token" && typeof payload.content === "string") {
@@ -52,6 +65,11 @@ function dispatchPayload(payload: Record<string, unknown>, handlers: ChatStreamH
       answer: typeof payload.answer === "string" ? payload.answer : "",
       citations: Array.isArray(payload.citations) ? (payload.citations as ChatCitation[]) : [],
       message_id: typeof payload.message_id === "string" ? payload.message_id : undefined,
+      mode: payload.mode === "deep" ? "deep" : "fast",
+      latency_ms:
+        payload.latency_ms && typeof payload.latency_ms === "object"
+          ? (payload.latency_ms as ChatLatencyMs)
+          : undefined,
       error: typeof payload.error === "string" ? payload.error : null,
     });
     return;
@@ -68,8 +86,9 @@ export async function streamProjectChat(
   projectId: string,
   message: string,
   handlers: ChatStreamHandlers,
-  signal?: AbortSignal,
+  options: { signal?: AbortSignal; mode?: ChatMode } = {},
 ): Promise<void> {
+  const { signal, mode = "fast" } = options;
   const token = getAccessToken();
   const res = await fetch(`${API_BASE}/api/projects/${projectId}/chat/stream/`, {
     method: "POST",
@@ -78,7 +97,7 @@ export async function streamProjectChat(
       Accept: "text/event-stream",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ message, mode }),
     signal,
   });
 
@@ -141,7 +160,8 @@ export async function streamProjectChat(
   }
 }
 
-export function chatStageLabel(stage: string): string {
+export function chatStageLabel(stage: string, message?: string): string {
+  if (message) return message;
   switch (stage) {
     case "memory":
       return "Loading history…";
@@ -160,4 +180,18 @@ export function chatStageLabel(stage: string): string {
     default:
       return "Working…";
   }
+}
+
+export function formatLatencyMs(ms?: number | null): string {
+  if (ms == null || Number.isNaN(ms)) return "";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+export function formatLatencySummary(latency?: ChatLatencyMs): string {
+  if (!latency) return "";
+  const parts: string[] = [];
+  if (latency.ttft != null) parts.push(`first token ${formatLatencyMs(latency.ttft)}`);
+  if (latency.total != null) parts.push(`total ${formatLatencyMs(latency.total)}`);
+  return parts.join(" · ");
 }

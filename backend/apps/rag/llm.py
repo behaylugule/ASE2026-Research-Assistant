@@ -25,9 +25,9 @@ def _build_messages(*, context: str, query: str, chat_history: list[dict]) -> li
     return messages
 
 
-def _chat_llm(*, streaming: bool = False) -> ChatOpenAI:
+def _chat_llm(*, model: str | None = None, streaming: bool = False) -> ChatOpenAI:
     return ChatOpenAI(
-        model=settings.OPENAI_CHAT_MODEL,
+        model=model or settings.OPENAI_CHAT_MODEL,
         temperature=0,
         api_key=settings.OPENAI_API_KEY,
         streaming=streaming,
@@ -54,11 +54,12 @@ def generate_with_context(
     context: str,
     query: str,
     chat_history: list[dict],
+    model: str | None = None,
 ) -> str:
     if not settings.OPENAI_API_KEY:
         raise ValueError("OPENAI_API_KEY is not configured")
 
-    llm = _chat_llm(streaming=False)
+    llm = _chat_llm(model=model, streaming=False)
     messages = _build_messages(context=context, query=query, chat_history=chat_history)
     result = llm.invoke(messages)
     return result.content
@@ -69,12 +70,13 @@ def stream_generate_with_context(
     context: str,
     query: str,
     chat_history: list[dict],
+    model: str | None = None,
 ) -> Iterator[str]:
     """Yield answer text deltas from the chat model."""
     if not settings.OPENAI_API_KEY:
         raise ValueError("OPENAI_API_KEY is not configured")
 
-    llm = _chat_llm(streaming=True)
+    llm = _chat_llm(model=model, streaming=True)
     messages = _build_messages(context=context, query=query, chat_history=chat_history)
     for chunk in llm.stream(messages):
         text = _chunk_text(chunk)
