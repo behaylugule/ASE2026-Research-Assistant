@@ -16,6 +16,18 @@ def retrieve_top_k_for_mode(mode: str) -> int:
     return settings.FAST_RETRIEVE_TOP_K
 
 
+def literature_top_k(mode: str) -> int:
+    if normalize_mode(mode) == "deep":
+        return settings.LITERATURE_DEEP_TOP_K
+    return settings.LITERATURE_FAST_TOP_K
+
+
+def synthesis_top_k(mode: str) -> int:
+    if normalize_mode(mode) == "deep":
+        return settings.SYNTHESIS_DEEP_TOP_K
+    return settings.SYNTHESIS_FAST_TOP_K
+
+
 def chat_model_for_mode(mode: str) -> str:
     if normalize_mode(mode) == "deep":
         return settings.OPENAI_CHAT_MODEL

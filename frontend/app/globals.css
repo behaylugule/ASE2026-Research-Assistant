@@ -1,14 +1,76 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(html[data-mock-theme="dark"] *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-instrument), system-ui, sans-serif;
+  --font-mono: var(--font-dm-mono), ui-monospace, monospace;
+}
+
 :root {
-  --bg: #0b0f14;
-  --sidebar: #0f1720;
-  --panel: #0f1720;
-  --text: #e7ecf3;
-  --muted: #94a3b8;
-  --accent: #3b82f6;
-  --border: #1f2a37;
-  --bubbleUser: #243044;
-  --bubbleAssistant: #0f1720;
-  --inputBg: #0b1220;
+  --radius: 0.5rem;
+  --background: #f5f2ec;
+  --foreground: #1a1916;
+  --card: #f5f2ec;
+  --card-foreground: #1a1916;
+  --popover: #f5f2ec;
+  --popover-foreground: #1a1916;
+  --primary: #2b4fa8;
+  --primary-foreground: #ffffff;
+  --secondary: #ede9e1;
+  --secondary-foreground: #4a4843;
+  --muted: #ede9e1;
+  --muted-foreground: #8a8780;
+  --accent: #e8edf7;
+  --accent-foreground: #1a3580;
+  --destructive: #991a1a;
+  --border: #d4d0c8;
+  --input: #d4d0c8;
+  --ring: #2b4fa8;
+}
+
+html[data-mock-theme="dark"] {
+  --background: #1c1b18;
+  --foreground: #f5f2ec;
+  --card: #262522;
+  --card-foreground: #f5f2ec;
+  --popover: #262522;
+  --popover-foreground: #f5f2ec;
+  --primary: #4a6fd4;
+  --primary-foreground: #ffffff;
+  --secondary: #302e2a;
+  --secondary-foreground: #c9c4ba;
+  --muted: #302e2a;
+  --muted-foreground: #8a8780;
+  --accent: #1e2d4d;
+  --accent-foreground: #a8c0f0;
+  --destructive: #e57373;
+  --border: #3f3c37;
+  --input: #3f3c37;
+  --ring: #4a6fd4;
 }
 
 * {
@@ -17,250 +79,22 @@
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-  background: var(--bg);
-  color: var(--text);
   line-height: 1.5;
-}
-
-a {
-  color: var(--accent);
 }
 
 main {
   min-height: 100vh;
 }
 
-input,
-textarea,
-button {
-  font: inherit;
-}
-
 button {
   cursor: pointer;
 }
 
-.card {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1rem 1.25rem;
-}
-
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.label {
-  display: block;
-  font-size: 0.85rem;
-  color: var(--muted);
-  margin-bottom: 0.25rem;
-}
-
-.field {
-  width: 100%;
-  padding: 0.5rem 0.65rem;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--inputBg);
-  color: var(--text);
-}
-
-.btn {
-  padding: 0.45rem 0.9rem;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--accent);
-  color: #fff;
-}
-
-.btn.secondary {
-  background: transparent;
-  color: var(--text);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.muted {
-  color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.citations {
-  font-size: 0.85rem;
-  color: var(--muted);
-  margin-top: 0.75rem;
-}
-
-.citations li {
-  margin: 0.25rem 0;
-}
-
-.appShell {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  height: 100vh;
-}
-
-.sidebar {
-  background: var(--sidebar);
-  border-right: 1px solid var(--border);
-  padding: 1rem;
-  overflow: auto;
-}
-
-.sidebarTitle {
-  font-size: 0.95rem;
-  color: var(--muted);
-  margin: 0 0 0.75rem;
-}
-
-.sidebarItem {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.5rem 0.6rem;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.sidebarItem + .sidebarItem {
-  margin-top: 0.5rem;
-}
-
-.sidebarItem strong {
-  font-weight: 600;
-}
-
-.sidebarMeta {
-  color: var(--muted);
-  font-size: 0.8rem;
-}
-
-.chatMain {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-.chatHeader {
-  padding: 0.9rem 1.25rem;
-  border-bottom: 1px solid var(--border);
-  background: rgba(15, 23, 32, 0.9);
-  backdrop-filter: blur(8px);
-}
-
-.chatTitle {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-.chatBody {
-  flex: 1;
-  overflow: auto;
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.composerWrap {
-  border-top: 1px solid var(--border);
-  padding: 1rem 1.25rem;
-  background: rgba(11, 15, 20, 0.95);
-}
-
-.composer {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  max-width: 900px;
-  margin: 0 auto;
-}
-
-.composer textarea {
-  resize: none;
-  min-height: 44px;
-  max-height: 180px;
-}
-
-.msg {
-  max-width: 900px;
-  width: 100%;
-  margin: 0 auto;
-  display: flex;
-}
-
-.msgInner {
-  padding: 0.75rem 0.9rem;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  white-space: pre-wrap;
-}
-
-.msgUser {
-  justify-content: flex-end;
-}
-
-.msgUser .msgInner {
-  background: var(--bubbleUser);
-}
-
-.msgAssistant {
-  justify-content: flex-start;
-}
-
-.msgAssistant .msgInner {
-  background: var(--bubbleAssistant);
-}
-
-.msgRole {
-  font-size: 0.72rem;
-  color: var(--muted);
-  margin-bottom: 0.35rem;
-  text-transform: capitalize;
-}
-
-.pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.2rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  color: var(--muted);
-  font-size: 0.75rem;
-}
-
-.msg-user {
-  align-self: flex-end;
-  background: #243044;
-  padding: 0.5rem 0.75rem;
-  border-radius: 8px;
-  max-width: 85%;
-}
-
-.msg-assistant {
-  align-self: flex-start;
-  background: #1c2633;
-  padding: 0.5rem 0.75rem;
-  border-radius: 8px;
-  max-width: 90%;
-  white-space: pre-wrap;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }

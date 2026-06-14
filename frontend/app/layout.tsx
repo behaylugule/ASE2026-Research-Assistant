@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import { DM_Mono, DM_Serif_Display, Instrument_Sans } from "next/font/google";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeScript } from "@/components/ThemeScript";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 import "./arxiv-theme.css";
 import "./arxiv-app.css";
+import "./chat-markdown.css";
 
 const instrument = Instrument_Sans({
   subsets: ["latin"],
@@ -30,10 +32,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className="app-arxiv-root">
       <body className={`${instrument.variable} ${dmMono.variable} ${dmSerif.variable} app-arxiv`}>
         <ThemeScript />
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <TooltipProvider delayDuration={300}>{children}</TooltipProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

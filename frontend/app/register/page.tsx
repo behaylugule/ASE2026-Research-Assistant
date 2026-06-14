@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ArxivTopBar } from "@/components/ArxivTopBar";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { apiJson, setTokens } from "@/lib/api";
 
 export default function RegisterPage() {
@@ -40,73 +45,72 @@ export default function RegisterPage() {
     <div className="arxiv-mock arxiv-app-shell">
       <ArxivTopBar logoHref="/" userInitials="·" />
 
-      <div className="mock-login-wrap" style={{ flex: 1 }}>
-        <div className="mock-card">
-          <div className="mock-tabs">
-            <Link href="/login" className="mock-tab" style={{ textAlign: "center", textDecoration: "none", color: "inherit" }}>
-              Login
-            </Link>
-            <span className="mock-tab is-on" style={{ textAlign: "center" }}>
-              Register
-            </span>
-          </div>
-          <form onSubmit={onSubmit}>
-            <div className="mock-field">
-              <label className="mock-label" htmlFor="username">
-                Username
-              </label>
-              <input
-                id="username"
-                className="mock-input"
-                autoComplete="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-              />
-            </div>
-            <div className="mock-field">
-              <label className="mock-label" htmlFor="email">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                className="mock-input"
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="mock-field">
-              <label className="mock-label" htmlFor="password">
-                Password (min 8)
-              </label>
-              <input
-                id="password"
-                type="password"
-                className="mock-input"
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                minLength={8}
-                required
-              />
-            </div>
-            {error ? (
-              <p style={{ color: "#991a1a", fontSize: 12, marginBottom: 8, fontFamily: "var(--font-mono)" }}>{error}</p>
-            ) : null}
-            <button className="mock-primary-btn" type="submit" disabled={loading}>
-              {loading ? "Creating…" : "Create account"}
-            </button>
-          </form>
-          <p style={{ marginTop: 14, fontSize: 12, color: "var(--color-text-muted)", textAlign: "center" }}>
-            Already have an account?{" "}
-            <Link href="/login" style={{ color: "var(--color-accent)", fontWeight: 500 }}>
-              Sign in
-            </Link>
-          </p>
-        </div>
+      <div className="mock-login-wrap flex flex-1 items-center justify-center p-6">
+        <Card className="w-full max-w-md border shadow-sm">
+          <CardHeader className="space-y-1 pb-4">
+            <CardTitle className="font-serif text-xl">Create account</CardTitle>
+            <CardDescription>Start uploading papers and chatting with citations</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="register" className="w-full">
+              <TabsList className="mb-6 grid w-full grid-cols-2">
+                <TabsTrigger value="login" asChild>
+                  <Link href="/login">Login</Link>
+                </TabsTrigger>
+                <TabsTrigger value="register">Register</TabsTrigger>
+              </TabsList>
+              <TabsContent value="register">
+                <form onSubmit={onSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Username</Label>
+                    <Input
+                      id="username"
+                      autoComplete="username"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      autoComplete="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password (min 8)</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      autoComplete="new-password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      minLength={8}
+                      required
+                    />
+                  </div>
+                  {error ? <p className="font-mono text-xs text-destructive">{error}</p> : null}
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "Creating…" : "Create account"}
+                  </Button>
+                </form>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+          <CardFooter className="justify-center border-t pt-4">
+            <p className="text-xs text-muted-foreground">
+              Already have an account?{" "}
+              <Link href="/login" className="font-medium text-primary hover:underline">
+                Sign in
+              </Link>
+            </p>
+          </CardFooter>
+        </Card>
       </div>
     </div>
   );

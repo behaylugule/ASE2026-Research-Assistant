@@ -20,6 +20,7 @@ class ChatMessage(models.Model):
     role = models.CharField(max_length=16, choices=ChatRole.choices)
     content = models.TextField()
     citations = models.JSONField(null=True, blank=True)
+    meta = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

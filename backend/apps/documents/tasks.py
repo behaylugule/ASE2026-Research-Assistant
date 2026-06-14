@@ -71,7 +71,9 @@ def ingest_document(document_id: str):
 
     doc.status = DocumentStatus.PROCESSING
     doc.error_message = ""
-    doc.save(update_fields=["status", "error_message", "updated_at"])
+    doc.ingestion_progress = 5
+    doc.ingestion_stage = "extracting"
+    doc.save(update_fields=["status", "error_message", "ingestion_progress", "ingestion_stage", "updated_at"])
 
     path = doc.file.path
     name_lower = doc.original_filename.lower()
@@ -90,7 +92,14 @@ def ingest_document(document_id: str):
         if not chunks:
             raise ValueError("No text could be extracted from the document")
 
+        doc.ingestion_progress = 35
+        doc.ingestion_stage = "chunking"
+        doc.save(update_fields=["ingestion_progress", "ingestion_stage", "updated_at"])
+
         texts = [c["content"] for c in chunks]
+        doc.ingestion_progress = 55
+        doc.ingestion_stage = "embedding"
+        doc.save(update_fields=["ingestion_progress", "ingestion_stage", "updated_at"])
         vectors = embed_texts(texts)
 
         project_id = str(doc.project_id)
@@ -122,9 +131,44 @@ def ingest_document(document_id: str):
             DocumentChunk.objects.bulk_create(bulk)
 
         doc.status = DocumentStatus.READY
-        doc.save(update_fields=["status", "page_count", "updated_at"])
+        doc.ingestion_progress = 100
+        doc.ingestion_stage = "ready"
+        doc.save(update_fields=["status", "page_count", "ingestion_progress", "ingestion_stage", "updated_at"])
     except Exception as exc:
         logger.exception("Ingest failed for %s", document_id)
         doc.status = DocumentStatus.FAILED
         doc.error_message = str(exc)[:2000]
-        doc.save(update_fields=["status", "error_message", "updated_at"])
+        doc.ingestion_progress = 0
+        doc.ingestion_stage = "failed"
+        doc.save(update_fields=["status", "error_message", "ingestion_progress", "ingestion_stage", "updated_at"])
+
+
+@shared_task
+def summarize_document(document_id: str):
+    from django.utils import timezone
+
+    from apps.documents.models import SummaryStatus
+
+    try:
+        doc = Document.objects.get(pk=document_id)
+    except Document.DoesNotExist:
+        logger.warning("Document %s not found for summarize", document_id)
+        return
+
+    doc.summary_status = SummaryStatus.PROCESSING
+    doc.save(update_fields=["summary_status", "updated_at"])
+
+    try:
+        from apps.rag.pipelines.summarize import run_document_summarize
+
+        result = run_document_summarize(document_id=document_id)
+        doc.summary_json = result
+        doc.summary_status = SummaryStatus.COMPLETED
+        doc.summary_updated_at = timezone.now()
+        doc.save(update_fields=["summary_json", "summary_status", "summary_updated_at"])
+    except Exception as exc:
+        logger.exception("Summarize failed for %s", document_id)
+        doc.summary_status = SummaryStatus.FAILED
+        doc.summary_json = {"error": str(exc)[:2000], "status": "failed"}
+        doc.summary_updated_at = timezone.now()
+        doc.save(update_fields=["summary_json", "summary_status", "summary_updated_at"])

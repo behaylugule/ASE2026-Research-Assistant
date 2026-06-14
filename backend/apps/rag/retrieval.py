@@ -6,6 +6,7 @@ from uuid import UUID
 from django.conf import settings
 from pgvector.django import CosineDistance
 
+from apps.documents.models import DocumentStatus
 from apps.rag.models import DocumentChunk
 
 _OVERVIEW_PATTERNS = (
@@ -55,6 +56,7 @@ def _row_to_chunk(row: DocumentChunk) -> dict:
         "document_id": str(row.document_id),
         "document_name": meta.get("document_name") or row.document.original_filename,
         "page_number": row.page_number,
+        "chunk_index": row.chunk_index,
         "distance": None,
     }
 
@@ -62,7 +64,10 @@ def _row_to_chunk(row: DocumentChunk) -> dict:
 def _intro_chunks(project_id: str | UUID, *, per_document: int = 2) -> list[dict]:
     """First chunks of each document — useful for titles, intros, and summaries."""
     doc_ids = (
-        DocumentChunk.objects.filter(document__project_id=project_id)
+        DocumentChunk.objects.filter(
+            document__project_id=project_id,
+            document__status=DocumentStatus.READY,
+        )
         .values_list("document_id", flat=True)
         .distinct()
     )
@@ -85,7 +90,10 @@ def _early_page_chunks(
 ) -> list[dict]:
     """Opening pages where characters are usually introduced (avoid late-book pages like 1080)."""
     doc_ids = (
-        DocumentChunk.objects.filter(document__project_id=project_id)
+        DocumentChunk.objects.filter(
+            document__project_id=project_id,
+            document__status=DocumentStatus.READY,
+        )
         .values_list("document_id", flat=True)
         .distinct()
     )
@@ -127,21 +135,24 @@ def retrieve_chunks(
     limit: int | None = None,
     *,
     query: str | None = None,
+    pipeline_mode: str = "qa",
 ) -> list[dict]:
     k = limit if limit is not None else settings.RETRIEVE_TOP_K
-    qs = (
-        DocumentChunk.objects.filter(document__project_id=project_id)
-        .select_related("document")
-        .annotate(distance=CosineDistance("embedding", query_embedding))
-        .order_by("distance")[:k]
-    )
+    base_qs = DocumentChunk.objects.filter(
+        document__project_id=project_id,
+        document__status=DocumentStatus.READY,
+    ).select_related("document")
+    qs = base_qs.annotate(distance=CosineDistance("embedding", query_embedding)).order_by("distance")[:k]
     vector_chunks = []
     for row in qs:
         chunk = _row_to_chunk(row)
         chunk["distance"] = float(row.distance) if row.distance is not None else None
         vector_chunks.append(chunk)
 
-    if query and is_character_query(query):
+    if not query:
+        return vector_chunks
+
+    if is_character_query(query):
         # Prefer early pages for names; limit vector hits so late pages (e.g. 1080) don't dominate.
         intro = _intro_chunks(project_id, per_document=2)
         early = _early_page_chunks(project_id, per_document=2, max_page=50)

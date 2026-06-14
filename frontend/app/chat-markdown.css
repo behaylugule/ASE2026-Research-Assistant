@@ -1,0 +1,270 @@
+/* Chat message markdown — centered reading column (ChatGPT-style) */
+
+.chat-thread {
+  width: 100%;
+  max-width: 42rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 1.25rem 1rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.chat-composer {
+  width: 100%;
+  max-width: 42rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 1rem;
+}
+
+.chat-thread .mock-mav {
+  display: none;
+}
+
+.chat-thread .mock-msg {
+  gap: 0;
+}
+
+.chat-response {
+  width: 100%;
+  padding: 4px 0 8px;
+  line-height: 1.65;
+}
+
+.chat-response-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.chat-response:hover .chat-response-toolbar,
+.chat-response:focus-within .chat-response-toolbar {
+  opacity: 1;
+}
+
+.chat-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.chat-section-block {
+  width: 100%;
+}
+
+.chat-section-block + .chat-section-block {
+  padding-top: 1.25rem;
+  border-top: 0.5px solid var(--color-border);
+}
+
+.chat-section-title {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--color-accent-pressed);
+}
+
+html[data-mock-theme="dark"] .chat-section-title {
+  color: #9db7f0;
+}
+
+.chat-section-desc {
+  color: var(--color-text-secondary);
+}
+
+.chat-md {
+  font-size: 14px;
+  color: var(--color-text-primary);
+  word-break: break-word;
+}
+
+.chat-md-h1,
+.chat-md-h2,
+.chat-md-h3 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin: 0 0 0.5rem;
+  line-height: 1.35;
+}
+
+.chat-md-h1 {
+  font-size: 1.05rem;
+}
+
+.chat-md-h2 {
+  font-size: 0.95rem;
+}
+
+.chat-md-h3 {
+  font-size: 0.875rem;
+}
+
+.chat-md-p {
+  margin: 0 0 0.75rem;
+}
+
+.chat-md-p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-md-ul,
+.chat-md-ol {
+  margin: 0 0 0.75rem;
+  padding-left: 1.25rem;
+}
+
+.chat-md-li {
+  margin-bottom: 0.35rem;
+}
+
+.chat-md-li::marker {
+  color: var(--color-accent);
+}
+
+.chat-md-strong {
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.chat-md-quote {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--color-accent);
+  background: var(--color-background-secondary);
+  border-radius: 0 4px 4px 0;
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+.chat-md-code {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  padding: 0.1em 0.35em;
+  border-radius: 3px;
+  background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border);
+}
+
+.chat-md-pre {
+  margin: 0.5rem 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: 6px;
+  background: var(--color-background-secondary);
+  border: 0.5px solid var(--color-border);
+  overflow-x: auto;
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.mock-msg.ai-full {
+  width: 100%;
+  align-self: stretch;
+}
+
+.mock-msg.ai-full .mock-mbody {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+  width: 100%;
+}
+
+.mock-msg.user {
+  align-self: flex-end;
+  max-width: 100%;
+}
+
+.mock-msg.user .mock-mbody {
+  max-width: min(100%, 28rem);
+}
+
+.mock-msg.user .mock-bub.user {
+  border-radius: 1.25rem;
+  padding: 10px 14px;
+}
+
+.mock-msg.ai-full .mock-mmeta {
+  text-align: left;
+}
+
+.mock-msg.ai-full .mock-cites {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chat-cites-panel {
+  margin-top: 12px;
+  width: 100%;
+  border: 0.5px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-background-secondary);
+  overflow: hidden;
+}
+
+.chat-cites-trigger {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.chat-cites-trigger:hover {
+  background: var(--color-accent-soft);
+}
+
+.chat-cites-trigger-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-muted);
+}
+
+.chat-cites-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent-pressed);
+}
+
+html[data-mock-theme="dark"] .chat-cites-count {
+  color: #9db7f0;
+}
+
+.chat-cites-chevron {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  transition: transform 0.2s ease;
+}
+
+.chat-cites-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.chat-cites-content {
+  border-top: 0.5px solid var(--color-border);
+  padding: 10px 12px 12px;
+}
+
+@media (min-width: 900px) {
+  .chat-thread,
+  .chat-composer {
+    max-width: 46rem;
+  }
+}

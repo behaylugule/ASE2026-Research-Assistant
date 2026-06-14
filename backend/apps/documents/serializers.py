@@ -1,9 +1,12 @@
+from django.db.models import Count
 from rest_framework import serializers
 
 from .models import Document
 
 
 class DocumentSerializer(serializers.ModelSerializer):
+    chunk_count = serializers.IntegerField(read_only=True, default=0)
+
     class Meta:
         model = Document
         fields = (
@@ -14,6 +17,11 @@ class DocumentSerializer(serializers.ModelSerializer):
             "status",
             "error_message",
             "page_count",
+            "chunk_count",
+            "ingestion_progress",
+            "ingestion_stage",
+            "summary_status",
+            "summary_updated_at",
             "created_at",
             "updated_at",
         )
@@ -23,6 +31,11 @@ class DocumentSerializer(serializers.ModelSerializer):
             "status",
             "error_message",
             "page_count",
+            "chunk_count",
+            "ingestion_progress",
+            "ingestion_stage",
+            "summary_status",
+            "summary_updated_at",
             "created_at",
             "updated_at",
         )

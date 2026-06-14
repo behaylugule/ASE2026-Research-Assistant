@@ -82,3 +82,47 @@ def stream_generate_with_context(
         text = _chunk_text(chunk)
         if text:
             yield text
+
+
+def _raw_messages(*, system: str, user: str, chat_history: list[dict] | None = None) -> list:
+    messages: list = [SystemMessage(content=system)]
+    for turn in chat_history or []:
+        role = turn.get("role")
+        content = turn.get("content", "")
+        if role == "user":
+            messages.append(HumanMessage(content=content))
+        elif role == "assistant":
+            messages.append(AIMessage(content=content))
+    messages.append(HumanMessage(content=user))
+    return messages
+
+
+def generate_raw(
+    *,
+    system: str,
+    user: str,
+    model: str | None = None,
+    chat_history: list[dict] | None = None,
+) -> str:
+    if not settings.OPENAI_API_KEY:
+        raise ValueError("OPENAI_API_KEY is not configured")
+    llm = _chat_llm(model=model, streaming=False)
+    result = llm.invoke(_raw_messages(system=system, user=user, chat_history=chat_history))
+    content = result.content
+    return content if isinstance(content, str) else str(content)
+
+
+def stream_raw(
+    *,
+    system: str,
+    user: str,
+    model: str | None = None,
+    chat_history: list[dict] | None = None,
+) -> Iterator[str]:
+    if not settings.OPENAI_API_KEY:
+        raise ValueError("OPENAI_API_KEY is not configured")
+    llm = _chat_llm(model=model, streaming=True)
+    for chunk in llm.stream(_raw_messages(system=system, user=user, chat_history=chat_history)):
+        text = _chunk_text(chunk)
+        if text:
+            yield text

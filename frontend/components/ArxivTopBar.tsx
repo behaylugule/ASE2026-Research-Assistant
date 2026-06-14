@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { Moon, Sun } from "lucide-react";
 import { useArxivTheme } from "@/components/ThemeProvider";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type ArxivTopBarProps = {
   userInitials?: string;
@@ -13,36 +18,30 @@ export function ArxivTopBar({ userInitials = "—", logoHref = "/projects" }: Ar
 
   return (
     <header className="mock-topbar">
-      <Link href={logoHref} className="mock-logo" style={{ textDecoration: "none", color: "inherit" }}>
+      <Link href={logoHref} className="mock-logo transition-opacity hover:opacity-80" style={{ textDecoration: "none", color: "inherit" }}>
         <span className="mock-dot" aria-hidden />
         Arxiv
       </Link>
-      <span className="mock-badge">RAG · pgvector</span>
-      <button
-        type="button"
-        className="mock-theme-toggle"
-        onClick={toggleTheme}
-        aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-        title={theme === "dark" ? "Light theme" : "Dark theme"}
-      >
-        {theme === "dark" ? (
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
-            <circle cx="8" cy="8" r="3.5" />
-            <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M2.5 2.5l1 1M12.5 12.5l1 1M2.5 13.5l1-1M12.5 3.5l1-1" strokeLinecap="round" />
-          </svg>
-        ) : (
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M10.5 3.5a4.5 4.5 0 1 1-7.3 5 5.2 5.2 0 0 0 2.3-5z"
-            />
-          </svg>
-        )}
-      </button>
-      <div className="mock-av" aria-hidden>
-        {userInitials}
-      </div>
+      <Badge variant="outline" className="ml-auto font-mono text-[10px] font-normal">
+        RAG · pgvector
+      </Badge>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          >
+            {theme === "dark" ? <Sun className="size-3.5" /> : <Moon className="size-3.5" />}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{theme === "dark" ? "Light theme" : "Dark theme"}</TooltipContent>
+      </Tooltip>
+      <Avatar className="size-7 border">
+        <AvatarFallback className="bg-primary text-[10px] font-medium text-primary-foreground">{userInitials}</AvatarFallback>
+      </Avatar>
     </header>
   );
 }

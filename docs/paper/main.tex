@@ -1,0 +1,353 @@
+%% ASE2026 Project Paper — ACM SIGPLAN format (POPL-style template)
+%% Compile on Overleaf: ACM Conference Proceedings Primary Article Template, sigplan
+%% Local: see README.md
+
+\documentclass[sigplan,review,anonymous]{acmart}
+
+\setcopyright{none}
+\copyrightyear{2026}
+\acmYear{2026}
+\acmDOI{}
+\acmConference[ASE '26]{Advanced Software Engineering Project}{June 2026}{}
+\acmISBN{}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{listings}
+\lstset{basicstyle=\ttfamily\small, breaklines=true}
+
+\begin{document}
+
+\title{Real-Time Interactive Academic Research Assistant with RAG and Citations}
+
+\author{Your Name}
+\affiliation{%
+  \institution{Your University}
+  \city{Your City}
+  \country{Your Country}}
+\email{your.email@university.edu}
+
+\begin{abstract}
+The volume of academic publications has made literature review increasingly time-consuming,
+while many AI assistants produce answers without verifiable sources.
+This project implements a \emph{Retrieval-Augmented Generation} (RAG) platform that lets
+researchers upload PDF and DOCX documents, ask questions in natural language, and receive
+\emph{streaming, citation-grounded} responses.
+The system supports four pipeline modes---Q\&A, full-document Summarize, Literature search,
+and multi-paper Synthesis---and offers \emph{Fast} and \emph{Deep} retrieval settings to
+trade latency against thoroughness.
+Built with Django REST, Celery, PostgreSQL with pgvector, and a Next.js frontend, the
+platform demonstrates how interactive research workflows can combine generative AI with
+source traceability.
+Evaluation on a two-document project shows Fast Q\&A responses in approximately 3.5\,s with
+three citations versus Deep mode with ten citations at comparable latency, while Deep
+Literature search produces broader thematic reports at higher cost (approximately 29\,s).
+\end{abstract}
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10011036.10011067.10011071</concept_id>
+<concept_desc>Computing methodologies~Natural language processing</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10002951.10003317</concept_id>
+<concept_desc>Information systems~Information retrieval</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+<concept>
+<concept_id>10003033.10003034</concept_id>
+<concept_desc>Human-centered computing~Interactive systems and tools</concept_desc>
+<concept_significance>300</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Computing methodologies~Natural language processing}
+\ccsdesc[500]{Information systems~Information retrieval}
+\ccsdesc[300]{Human-centered computing~Interactive systems and tools}
+
+\keywords{RAG, academic research assistant, citations, pgvector, streaming LLM, literature review}
+
+\maketitle
+
+\section{Introduction}
+\label{sec:intro}
+
+The rapid growth of academic publications has made it increasingly difficult for researchers
+and students to efficiently locate, analyze, and synthesize relevant information.
+Traditional research methods require extensive manual effort to search for papers, evaluate
+their relevance, and extract key insights.
+While recent advances in artificial intelligence have introduced tools to assist with these
+tasks, many systems lack reliability---often generating responses without verifiable sources
+or producing inaccurate information~\cite{ase2026proposal}.
+
+This project addresses these challenges by building an AI-powered academic research assistant
+based on a RAG architecture~\cite{lewis2020rag}.
+Unlike generic chatbots, the system restricts answers to \emph{user-uploaded documents},
+attaches inline citations with page numbers, and optimizes for \emph{real-time interaction}
+through server-sent event (SSE) streaming and a Fast mode with reduced retrieval depth.
+
+Most research assistants optimize answer quality at the cost of speed.
+Our design explicitly targets \emph{time-to-first-response} and continuous conversation flow:
+users receive immediate pipeline feedback, streaming tokens, and a Fast mode for low-latency
+interaction while reading.
+
+\paragraph{Contributions.}
+To summarize, our contributions are:
+\begin{itemize}
+  \item A multi-mode RAG platform with four specialized pipelines: Q\&A, Summarize,
+        Literature search, and Synthesis.
+  \item A Fast vs.\ Deep retrieval strategy with measurable latency--quality tradeoffs.
+  \item A streaming chat UX with pipeline stage feedback and time-to-first-token metrics.
+  \item Citation precision with per-chunk snippets, character offsets, and click-to-highlight
+        excerpt panels.
+  \item A two-phase \emph{Refine with Deep} pattern for upgrading Fast Q\&A drafts on demand.
+\end{itemize}
+
+\paragraph{Paper structure.}
+\S\ref{sec:problem} states the problem and requirements.
+\S\ref{sec:arch} describes the system architecture.
+\S\ref{sec:rag} presents the RAG pipeline and ingestion methodology.
+\S\ref{sec:modes} surveys the four pipeline modes.
+\S\ref{sec:impl} discusses implementation highlights.
+\S\ref{sec:eval} reports experimental evaluation.
+\S\ref{sec:related} surveys related work.
+\S\ref{sec:conclusion} concludes.
+
+\section{Problem Statement and Requirements}
+\label{sec:problem}
+
+Researchers face three interrelated problems: (1)~\emph{information overload}---too many
+papers to read in available time; (2)~\emph{untrusted AI outputs}---hallucinated facts and
+missing citations limit academic use; and (3)~\emph{slow AI UX}---systems that prioritize
+answer perfection over interaction speed disrupt research flow.
+
+\paragraph{Functional requirements.}
+The system must support user registration and JWT authentication; project-scoped document
+upload (PDF, DOCX); async ingestion (extract, chunk, embed, index); chat with streaming
+responses and history; automatic inline citations; and multiple research modes.
+
+\paragraph{Non-functional requirements.}
+Fast Q\&A on warm queries should complete in under 10\,s; answers must be traceable to
+source document, page, and excerpt; the backend must scale via worker queues; and embeddings
+must run on CPU without requiring a GPU.
+
+Table~\ref{tab:proposal} maps the original project proposal objectives to our implementation.
+
+\begin{table}[t]
+  \caption{Proposal objectives vs.\ implementation.}
+  \label{tab:proposal}
+  \small
+  \begin{tabular}{@{}p{0.42\columnwidth}p{0.48\columnwidth}@{}}
+    \toprule
+    \textbf{Objective} & \textbf{Implementation} \\
+    \midrule
+    Reduce research time & Fast mode ($k{=}3$), SSE streaming, Celery ingestion \\
+    Improve accuracy & Project-scoped RAG; no open-web hallucination \\
+    Ensure scalability & Docker Compose; Celery workers; HNSW pgvector index \\
+    Enhance trust & Inline citations; Sources panel; excerpt highlight API \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{System Architecture}
+\label{sec:arch}
+
+Figure~\ref{fig:arch} summarizes the major components.
+The \textbf{Next.js frontend} provides authentication, project workspace, document list,
+streaming chat, and a citation panel.
+The \textbf{Django REST API} exposes JWT auth, project/document CRUD, and chat/SSE endpoints.
+\textbf{Celery workers} handle background ingestion and full-document summarize jobs.
+\textbf{PostgreSQL with pgvector} stores relational data and 384-dimensional embeddings
+with an HNSW cosine index~\cite{pgvector2023,johnson2019hnsw}.
+\textbf{Redis} serves as the Celery broker.
+\textbf{sentence-transformers} computes local CPU embeddings (\texttt{all-MiniLM-L6-v2}).
+The \textbf{OpenAI Chat API} generates answers (\texttt{gpt-4o-mini}).
+
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox{0.92\columnwidth}{\small
+    \textbf{Next.js UI} $\leftrightarrow$ \textbf{Django REST} (JWT + SSE)\\
+    $\downarrow$ \hspace{2em} $\downarrow$ \hspace{2em} $\downarrow$\\
+    PostgreSQL+pgvector \quad Redis/Celery \quad OpenAI Chat API\\
+    \textit{Ingestion: PDF/DOCX $\to$ chunk $\to$ embed $\to$ HNSW index}
+  }}
+  \caption{High-level system architecture.}
+  \label{fig:arch}
+\end{figure}
+
+\paragraph{Data model.}
+A \emph{Project} contains documents and chat messages with per-user isolation.
+A \emph{Document} tracks upload status (\texttt{pending} $\to$ \texttt{processing} $\to$
+\texttt{ready} / \texttt{failed}).
+A \emph{DocumentChunk} stores text, embedding, page number, and metadata.
+\emph{ChatMessage} records user/assistant turns with citations JSON and mode metadata.
+
+\paragraph{Security.}
+All project routes require JWT authentication and project membership.
+Retrieval queries filter by \texttt{project\_id} and \texttt{document.status = ready}.
+
+\section{RAG Pipeline}
+\label{sec:rag}
+
+\subsection{Ingestion}
+Users upload PDF or DOCX files (max 50\,MB).
+A Celery task extracts text per page, splits it into chunks of 300--500 tokens, embeds each
+chunk with \texttt{all-MiniLM-L6-v2}~\cite{reimers2019sbert} (normalized 384-dim vectors),
+and stores rows in \texttt{DocumentChunk} with an HNSW index for cosine similarity search.
+
+\subsection{Query Processing (Q\&A Mode)}
+The Q\&A pipeline executes seven stages:
+(1)~load recent chat history (Fast: 6 turns, Deep: 20);
+(2)~enhance and embed the user query;
+(3)~retrieve top-$k$ chunks via pgvector cosine search, project-scoped;
+(4)~aggregate excerpts grouped by document with page labels;
+(5)~generate an answer via OpenAI chat with system prompt and history;
+(6)~build citations from retrieved chunks (snippet, offsets, \texttt{chunk\_id});
+(7)~persist user and assistant messages.
+Overview-style queries merge intro and early-page chunks with vector results to improve recall.
+
+\subsection{Prompt Design}
+The Q\&A system prompt instructs the model to answer only from retrieved excerpts and
+conversation history; provide partial answers when excerpts are relevant but incomplete;
+respond \emph{Not found in the provided documents} only when context truly lacks support;
+and add inline citations in the form \texttt{[DocumentName -- Page N]}.
+
+\section{Pipeline Modes}
+\label{sec:modes}
+
+Table~\ref{tab:modes} summarizes the four pipeline modes and recommended use cases.
+
+\begin{table}[t]
+  \caption{Pipeline modes and retrieval settings.}
+  \label{tab:modes}
+  \small
+  \begin{tabular}{@{}llcc@{}}
+    \toprule
+    \textbf{Mode} & \textbf{Best for} & \textbf{Fast $k$} & \textbf{Deep $k$} \\
+    \midrule
+    Q\&A & Specific factual questions & 3 & 10 \\
+    Summarize & Full overview of one doc & \multicolumn{2}{c}{all chunks} \\
+    Literature & Cross-paper exploration & 15 & 25 \\
+    Synthesis & Multi-paper lit.\ review & 20 & 40 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Q\&A.}
+Answers specific questions using top-$k$ vector retrieval with inline citations.
+
+\paragraph{Summarize.}
+Hierarchical map-reduce over \emph{all} chunks of one selected document, producing sections:
+Objective, Methodology, Key Findings, Limitations, Conclusion.
+Runs asynchronously via Celery.
+
+\paragraph{Literature search.}
+Exploration report with Thematic clusters, Paper-level summaries, and Key insights.
+
+\paragraph{Synthesis.}
+Literature-review style output with themed sections, Agreements, Contradictions, and Conclusion.
+
+\section{Implementation Highlights}
+\label{sec:impl}
+
+\paragraph{Streaming chat (SSE).}
+\texttt{POST /api/projects/\{id\}/chat/stream/} returns \texttt{text/event-stream} events:
+\texttt{status} (pipeline stage), \texttt{token} (answer delta), and \texttt{done}
+(full answer, citations, \texttt{message\_id}, \texttt{latency\_ms}).
+The frontend uses \texttt{fetch} + \texttt{ReadableStream} to support JWT headers.
+
+\paragraph{Fast vs.\ Deep.}
+Reranking was intentionally removed to reduce latency and API cost.
+Users can trigger \emph{Refine with Deep} after a Fast Q\&A answer to regenerate with
+deeper retrieval without re-typing the question.
+
+\paragraph{Citation precision.}
+Each citation includes document name, page, chunk ID, snippet text, and character offsets.
+The frontend fetches full chunk text via
+\texttt{GET /api/projects/\{id\}/chunks/\{chunk\_id\}/} for highlight rendering.
+
+\section{Evaluation}
+\label{sec:eval}
+
+We benchmarked the system on project \emph{AI in Health Care} (2 indexed PDFs, 140 chunks)
+using the built-in \texttt{/chat/benchmark/} endpoint and demo UI.
+
+Table~\ref{tab:qa} reports Q\&A latency on warm queries.
+Table~\ref{tab:lit} reports Literature search results.
+
+\begin{table}[t]
+  \caption{Q\&A latency (warm queries).}
+  \label{tab:qa}
+  \small
+  \begin{tabular}{@{}lrrrr@{}}
+    \toprule
+    \textbf{Query} & \textbf{Fast ms} & \textbf{Deep ms} & \textbf{Fast cite.} & \textbf{Deep cite.} \\
+    \midrule
+    Methodology described? & 3{,}520 & 3{,}446 & 3 & 10 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \caption{Literature search latency.}
+  \label{tab:lit}
+  \small
+  \begin{tabular}{@{}lrrrr@{}}
+    \toprule
+    \textbf{Query} & \textbf{Fast ms} & \textbf{Deep ms} & \textbf{Fast cite.} & \textbf{Deep cite.} \\
+    \midrule
+    Themes across papers? & 6{,}726 & 28{,}767 & 15 & 25 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Findings.}
+Fast Q\&A delivers interactive responses (3--7\,s warm) with fewer but sufficient citations.
+Deep Q\&A retrieves $3\times$ more chunks with similar latency on short answers.
+Deep Literature produces longer reports at approximately $4\times$ the latency of Fast.
+First query after backend restart incurs a 10--15\,s cold start for embedding model load;
+startup warm-up mitigates this effect.
+
+Qualitative trust checks confirm that citations map to real uploaded pages, unsupported
+questions return the exact not-found phrase, and citation clicks open highlighted excerpts.
+
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{RAG.}
+Lewis et al.~\cite{lewis2020rag} combine dense retrieval with LLMs to ground generation in
+external documents.
+We apply RAG in a project-scoped academic setting rather than open-web search.
+
+\paragraph{Academic research tools.}
+Semantic Scholar, Elicit, and Connected Papers focus on discovery across published corpora.
+Our system complements these by operating on a private document library per project.
+
+\paragraph{Citation-grounded QA.}
+Systems such as Perplexity provide source links but search the public web.
+We enforce grounding through prompt design, retrieval scope, and explicit not-found responses.
+
+\paragraph{Interactive LLM applications.}
+Streaming improves perceived latency; our design targets time-to-first-response as a
+first-class metric for research chat workflows.
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+This project delivers an AI-powered academic research assistant that fulfills and extends
+the original ASE2026 proposal.
+By combining RAG with streaming interaction, four specialized pipeline modes, and verifiable
+citations, the system demonstrates how generative AI can support academic workflows without
+sacrificing trust or responsiveness.
+The Fast/Deep tradeoff provides a practical pattern for balancing latency and thoroughness.
+
+Future work includes production hardening, a full PDF page viewer, formal citation-precision
+evaluation, hybrid BM25+vector retrieval, and optional reranking in Deep mode only.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{references}
+
+\end{document}

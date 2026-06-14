@@ -4,8 +4,28 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArxivTopBar } from "@/components/ArxivTopBar";
-import { apiJson, getAccessToken, uploadDocument } from "@/lib/api";
-import { chatStageLabel, formatLatencySummary, streamProjectChat, type ChatCitation, type ChatLatencyMs, type ChatMode } from "@/lib/chat-stream";
+import { ChatCitations } from "@/components/ChatCitations";
+import { ChatMessageBody } from "@/components/ChatMessageBody";
+import { PipelineModeDropdown } from "@/components/PipelineModeDropdown";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { DocumentExcerptPanel } from "@/components/DocumentExcerptPanel";
+import { apiJson, getAccessToken, retryDocument, uploadDocument } from "@/lib/api";
+import {
+  chatStageLabel,
+  formatLatencySummary,
+  streamProjectChat,
+  streamRefineChat,
+  type ChatCitation,
+  type ChatLatencyMs,
+  type ChatMessageMeta,
+  type ChatMode,
+  type PipelineMode,
+} from "@/lib/chat-stream";
+import { Download, FlaskConical, RotateCcw, Send, Sparkles, Square, Upload } from "lucide-react";
 
 type ProjectRow = {
   id: string;
@@ -22,6 +42,10 @@ type DocumentRow = {
   page_count?: number | null;
   created_at: string;
   updated_at: string;
+  summary_status?: string;
+  chunk_count?: number;
+  ingestion_progress?: number;
+  ingestion_stage?: string;
 };
 
 type Citation = ChatCitation;
@@ -31,6 +55,7 @@ type ChatMessage = {
   role: string;
   content: string;
   citations?: Citation[] | null;
+  meta?: ChatMessageMeta | null;
   created_at: string;
 };
 
@@ -86,6 +111,7 @@ export default function ProjectDetailPage() {
   const [chatError, setChatError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [chatMode, setChatMode] = useState<ChatMode>("fast");
+  const [pipelineMode, setPipelineMode] = useState<PipelineMode>("qa");
   const [streamDraft, setStreamDraft] = useState<{
     content: string;
     stage: string;
@@ -97,6 +123,8 @@ export default function ProjectDetailPage() {
   const [uploading, setUploading] = useState(false);
   const [docTab, setDocTab] = useState<"all" | "pdf" | "docx">("all");
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  const [selectedCitation, setSelectedCitation] = useState<ChatCitation | null>(null);
+  const [refiningId, setRefiningId] = useState<string | null>(null);
   const [userAv, setUserAv] = useState("U");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -218,9 +246,80 @@ export default function ProjectDetailPage() {
     chatAbortRef.current?.abort();
   }
 
+  function onCitationSelect(c: ChatCitation) {
+    setSelectedCitation(c);
+    if (c.document_id) setSelectedDocId(c.document_id);
+  }
+
+  async function refineMessage(assistantMessageId: string) {
+    if (refiningId || sending) return;
+    setChatError(null);
+    setSending(true);
+    setRefiningId(assistantMessageId);
+    setStreamDraft({ content: "", stage: "retrieve", citations: [] });
+    chatAbortRef.current?.abort();
+    const controller = new AbortController();
+    chatAbortRef.current = controller;
+    try {
+      await streamRefineChat(
+        id,
+        assistantMessageId,
+        {
+          onStatus: (stage, message) => {
+            setStreamDraft((prev) => (prev ? { ...prev, stage, statusMessage: message } : prev));
+          },
+          onToken: (content) => {
+            setStreamDraft((prev) => (prev ? { ...prev, content: prev.content + content } : prev));
+          },
+          onDone: (payload) => {
+            if (payload.error) setChatError(payload.error);
+            setStreamDraft((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    content: payload.answer || prev.content,
+                    citations: payload.citations,
+                    latencyMs: payload.latency_ms,
+                    stage: "done",
+                  }
+                : prev,
+            );
+          },
+          onError: (detail) => setChatError(detail),
+        },
+        { signal: controller.signal },
+      );
+      await refreshMessages();
+    } catch (err) {
+      if (err instanceof Error && err.name !== "AbortError") {
+        setChatError(err instanceof Error ? err.message : "Refine failed");
+      }
+    } finally {
+      setStreamDraft(null);
+      setSending(false);
+      setRefiningId(null);
+      chatAbortRef.current = null;
+    }
+  }
+
+  async function retryIngest(docId: string) {
+    try {
+      await retryDocument(id, docId);
+      await refreshDocs();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Retry failed");
+    }
+  }
+
   async function sendChatMessage() {
     const text = chatInput.trim();
-    if (!text || sending) return;
+    if (pipelineMode === "summarize" && !selectedDocId) {
+      setChatError("Select a document in the sidebar for Summarize mode.");
+      return;
+    }
+    if (!text && pipelineMode !== "summarize") return;
+    if (sending) return;
+    const userText = text || (pipelineMode === "summarize" ? "Summarize this document" : "");
     setChatError(null);
     setSending(true);
     setChatInput("");
@@ -228,7 +327,7 @@ export default function ProjectDetailPage() {
     const optimisticUser: ChatMessage = {
       id: `tmp-user-${Date.now()}`,
       role: "user",
-      content: text,
+      content: userText,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, optimisticUser]);
@@ -241,7 +340,7 @@ export default function ProjectDetailPage() {
     try {
       await streamProjectChat(
         id,
-        text,
+        userText,
         {
           onStatus: (stage, message) => {
             setStreamDraft((prev) => (prev ? { ...prev, stage, statusMessage: message } : prev));
@@ -269,7 +368,7 @@ export default function ProjectDetailPage() {
             setChatError(detail);
           },
         },
-        { signal: controller.signal, mode: chatMode },
+        { signal: controller.signal, mode: chatMode, pipelineMode, documentId: selectedDocId },
       );
       await refreshMessages();
     } catch (err) {
@@ -283,6 +382,35 @@ export default function ProjectDetailPage() {
       setStreamDraft(null);
       setSending(false);
       chatAbortRef.current = null;
+    }
+  }
+
+  async function triggerDocSummarize(docId: string) {
+    try {
+      await apiJson(`/api/projects/${id}/documents/${docId}/summarize/`, { method: "POST" });
+      await refreshDocs();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Summarize failed");
+    }
+  }
+
+  function pipelineTopKLabel(): string {
+    if (pipelineMode === "literature_search") return chatMode === "fast" ? "lit 15" : "lit 25";
+    if (pipelineMode === "synthesis") return chatMode === "fast" ? "syn 20" : "syn 40";
+    if (pipelineMode === "summarize") return "all chunks";
+    return chatMode === "fast" ? "top-k 3" : "top-k 10";
+  }
+
+  function pipelineHint(): string {
+    switch (pipelineMode) {
+      case "summarize":
+        return "Select one document, then ask or send empty to summarize (uses ALL chunks).";
+      case "literature_search":
+        return "Explore themes and papers across your project.";
+      case "synthesis":
+        return "Multi-paper literature review synthesis.";
+      default:
+        return "Ask a specific question — grounded Q&A with citations.";
     }
   }
 
@@ -304,35 +432,56 @@ export default function ProjectDetailPage() {
   function docStatusRow(d: DocumentRow) {
     if (d.status === "failed") {
       return (
-        <div style={{ display: "flex", alignItems: "center", marginTop: 3 }}>
-          <span className="mock-sdot fail" />
-          <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--color-text-muted)" }}>
-            Failed{d.error_message ? ` · ${d.error_message.slice(0, 40)}` : ""}
-          </span>
+        <div className="flex flex-col gap-1" style={{ marginTop: 3 }}>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="mock-sdot fail" />
+            <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--color-text-muted)" }}>
+              Failed{d.error_message ? ` · ${d.error_message.slice(0, 40)}` : ""}
+            </span>
+            <Button type="button" variant="ghost" size="xs" className="h-6 px-2 text-[10px]" onClick={(e) => { e.stopPropagation(); void retryIngest(d.id); }}>
+              <RotateCcw className="size-3" />
+              Retry
+            </Button>
+          </div>
         </div>
       );
     }
     if (d.status === "ready") {
       return (
-        <div style={{ display: "flex", alignItems: "center", marginTop: 3 }}>
-          <span className="mock-sdot ready" />
-          <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--color-text-muted)" }}>
-            Indexed · {formatShortDate(d.updated_at)}
-          </span>
+        <div style={{ marginTop: 3 }}>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="mock-sdot ready" />
+            <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--color-text-muted)" }}>
+              Indexed · {formatShortDate(d.updated_at)}
+              {d.chunk_count != null ? ` · ${d.chunk_count} chunks` : ""}
+              {d.summary_status && d.summary_status !== "none" ? ` · summary ${d.summary_status}` : ""}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              className="h-6 px-2 text-[10px]"
+              onClick={(e) => {
+                e.stopPropagation();
+                void triggerDocSummarize(d.id);
+              }}
+            >
+              Summarize
+            </Button>
+          </div>
         </div>
       );
     }
+    const progress = d.ingestion_progress ?? (d.status === "pending" ? 5 : 25);
     return (
       <>
-        {(d.status === "processing" || d.status === "pending") && (
-          <div className="mock-pbar">
-            <div className="mock-pbar-fill" />
-          </div>
-        )}
-        <div style={{ display: "flex", alignItems: "center", marginTop: 3 }}>
+        <div className="ingest-pbar">
+          <div className="ingest-pbar-fill" style={{ width: `${Math.min(100, progress)}%` }} />
+        </div>
+        <div style={{ display: "flex", alignItems: "center", marginTop: 3, gap: 6 }}>
           <span className="mock-sdot proc" />
           <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--color-text-muted)" }}>
-            {d.status === "pending" ? "Queued…" : "Processing…"}
+            {d.ingestion_stage || (d.status === "pending" ? "Queued…" : "Processing…")} · {progress}%
           </span>
         </div>
       </>
@@ -369,37 +518,26 @@ export default function ProjectDetailPage() {
             {indexedCount} indexed · {docs.length} documents · updated {lastUpdatedIso ? formatShortDate(lastUpdatedIso) : "—"}
           </div>
         </div>
-        <div className="app-hdr-acts">
-          <button type="button" className="app-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-            {uploading ? "Uploading…" : "↑ Upload"}
-          </button>
-          <button type="button" className="app-btn app-btn-primary" onClick={() => void exportChat()}>
+        <div className="app-hdr-acts flex gap-2">
+          <Button type="button" variant="outline" size="sm" asChild>
+            <Link href={`/projects/${id}/demo`}>
+              <FlaskConical className="size-3.5" />
+              Fast vs Deep
+            </Link>
+          </Button>
+          <Button type="button" variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+            <Upload className="size-3.5" />
+            {uploading ? "Uploading…" : "Upload"}
+          </Button>
+          <Button type="button" size="sm" onClick={() => void exportChat()}>
+            <Download className="size-3.5" />
             Export chat
-          </button>
+          </Button>
         </div>
       </div>
 
-      <div className="mock-stats">
-        <div className="mock-stat">
-          <div className="mock-stat-lbl">Documents</div>
-          <div className="mock-stat-val">{docs.length}</div>
-        </div>
-        <div className="mock-stat">
-          <div className="mock-stat-lbl">Indexed</div>
-          <div className="mock-stat-val">{indexedCount}</div>
-        </div>
-        <div className="mock-stat">
-          <div className="mock-stat-lbl">Chunks</div>
-          <div className="mock-stat-val">—</div>
-        </div>
-        <div className="mock-stat">
-          <div className="mock-stat-lbl">Messages</div>
-          <div className="mock-stat-val">{messages.length}</div>
-        </div>
-      </div>
-
-      <div className="mock-ws" style={{ flex: 1, minHeight: 0 }}>
-        <div className="mock-ws-grid">
+      <div className="mock-ws flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="mock-ws-grid min-h-0 flex-1">
           <aside className="mock-ws-side">
             <div className="mock-side-lbl">Projects</div>
             <Link href="/projects" className="mock-new-dash">
@@ -424,17 +562,20 @@ export default function ProjectDetailPage() {
           </aside>
 
           <div className="mock-ws-docs">
-            <div className="mock-doc-ph" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ flex: 1 }}>Documents</span>
-              <button type="button" className={`mock-tab ${docTab === "all" ? "on" : ""}`} onClick={() => setDocTab("all")}>
-                All
-              </button>
-              <button type="button" className={`mock-tab ${docTab === "pdf" ? "on" : ""}`} onClick={() => setDocTab("pdf")}>
-                PDF
-              </button>
-              <button type="button" className={`mock-tab ${docTab === "docx" ? "on" : ""}`} onClick={() => setDocTab("docx")}>
-                DOCX
-              </button>
+            <div className="mock-doc-ph flex items-center gap-1.5">
+              <span className="flex-1 text-xs font-medium">Documents</span>
+              {(["all", "pdf", "docx"] as const).map((tab) => (
+                <Button
+                  key={tab}
+                  type="button"
+                  variant={docTab === tab ? "secondary" : "ghost"}
+                  size="xs"
+                  className="h-6 px-2 text-[10px] uppercase"
+                  onClick={() => setDocTab(tab)}
+                >
+                  {tab}
+                </Button>
+              ))}
             </div>
 
             <div
@@ -464,10 +605,10 @@ export default function ProjectDetailPage() {
                 filteredDocs.map((d) => {
                   const pdf = isPdf(d.original_filename, d.mime_type);
                   return (
-                    <button
+                    <div
                       key={d.id}
-                      type="button"
                       className={`mock-doc-item ${selectedDocId === d.id ? "is-sel" : ""}`}
+                      aria-selected={selectedDocId === d.id}
                       onClick={() => setSelectedDocId(d.id === selectedDocId ? null : d.id)}
                     >
                       <div className={`mock-dtype ${pdf ? "pdf" : "docx"}`}>{pdf ? "PDF" : "DOCX"}</div>
@@ -476,44 +617,41 @@ export default function ProjectDetailPage() {
                         <div className="mock-doc-meta">{docMetaLine(d)}</div>
                         {docStatusRow(d)}
                       </div>
-                    </button>
+                    </div>
                   );
                 })
               )}
             </div>
+
+            <DocumentExcerptPanel
+              projectId={id}
+              citation={selectedCitation}
+              onClose={() => setSelectedCitation(null)}
+            />
           </div>
 
-          <div className="mock-ws-chat">
+          <div className="mock-ws-chat flex min-h-0 flex-col">
             <div className="mock-chat-hdr">
               <span>Chat</span>
-              <div className="mock-set-nav" style={{ marginLeft: "auto", marginRight: 8 }}>
-                <button
-                  type="button"
-                  className={chatMode === "fast" ? "is-on" : ""}
-                  onClick={() => setChatMode("fast")}
-                  disabled={sending}
-                  title="Fast mode: fewer chunks, lower latency"
-                >
-                  Fast
-                </button>
-                <button
-                  type="button"
-                  className={chatMode === "deep" ? "is-on" : ""}
-                  onClick={() => setChatMode("deep")}
-                  disabled={sending}
-                  title="Deep mode: more context, slower"
-                >
-                  Deep
-                </button>
-              </div>
-              <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--color-text-muted)" }}>
-                {chatMode === "fast" ? "top-k 3" : "top-k 10"}
-              </span>
+              <PipelineModeDropdown
+                pipelineMode={pipelineMode}
+                chatMode={chatMode}
+                topKLabel={pipelineTopKLabel()}
+                disabled={sending}
+                onPipelineChange={setPipelineMode}
+                onChatModeChange={setChatMode}
+              />
+            </div>
+            <div className="mock-chat-hint border-b px-3 py-2">
+              <Badge variant="outline" className="max-w-full truncate font-mono text-[10px] font-normal">
+                {pipelineHint()}
+              </Badge>
             </div>
 
-            <div className="mock-msgs">
+            <ScrollArea className="mock-chat-scroll">
+              <div className="chat-thread">
               {messages.length === 0 && !sending ? (
-                <div style={{ fontSize: 12, color: "var(--color-text-muted)", textAlign: "center", padding: "1rem" }}>
+                <div className="py-6 text-center text-xs text-muted-foreground">
                   Upload documents, then ask a question. Answers include citations when sources are found.
                 </div>
               ) : null}
@@ -524,38 +662,45 @@ export default function ProjectDetailPage() {
                     <div className="mock-mav user">{userAv}</div>
                     <div className="mock-mbody">
                       <div className="mock-mmeta">{formatTime(m.created_at)}</div>
-                      <div className="mock-bub user">{m.content}</div>
+                      <ChatMessageBody content={m.content} variant="user" />
                     </div>
                   </div>
                 ) : (
-                  <div key={m.id} className="mock-msg">
+                  <div key={m.id} className="mock-msg ai-full">
                     <div className="mock-mav ai">A</div>
                     <div className="mock-mbody">
-                      <div className="mock-mmeta">
-                        Arxiv · {formatTime(m.created_at)} · {m.citations?.length ?? 0} sources
+                      <div className="mock-mmeta flex flex-wrap items-center gap-2">
+                        <span>
+                          Arxiv · {formatTime(m.created_at)} · {m.citations?.length ?? 0} sources
+                          {m.meta?.refined ? " · refined" : m.meta?.mode === "fast" ? " · fast" : m.meta?.mode === "deep" ? " · deep" : ""}
+                        </span>
+                        {m.meta?.mode === "fast" && !m.meta?.refined && pipelineMode === "qa" ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            className="h-6 text-[10px]"
+                            disabled={sending}
+                            onClick={() => void refineMessage(m.id)}
+                          >
+                            <Sparkles className="size-3" />
+                            Refine with Deep
+                          </Button>
+                        ) : null}
                       </div>
-                      <div className="mock-bub ai">{m.content}</div>
-                      {m.citations && m.citations.length > 0 ? (
-                        <div className="mock-cites">
-                          {m.citations.map((c, i) => (
-                            <div key={i} className="mock-cite">
-                              <div className="mock-cnum">{i + 1}</div>
-                              <div>
-                                <div className="mock-cdoc">{c.document_name ?? "Document"}</div>
-                                <div className="mock-csnip">{c.label ?? ""}</div>
-                                <div className="mock-cpg">{c.page_number != null ? `p. ${c.page_number}` : "p. n/a"}</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
+                      <ChatMessageBody content={m.content} variant="ai" />
+                      <ChatCitations
+                        citations={m.citations ?? []}
+                        selectedChunkId={selectedCitation?.chunk_id}
+                        onSelectCitation={onCitationSelect}
+                      />
                     </div>
                   </div>
                 ),
               )}
 
               {sending && streamDraft ? (
-                <div className="mock-msg">
+                <div className="mock-msg ai-full">
                   <div className="mock-mav ai">A</div>
                   <div className="mock-mbody">
                     <div className="mock-mmeta">
@@ -564,7 +709,7 @@ export default function ProjectDetailPage() {
                       {streamDraft.latencyMs ? ` · ${formatLatencySummary(streamDraft.latencyMs)}` : ""}
                     </div>
                     {streamDraft.content ? (
-                      <div className="mock-bub ai">{streamDraft.content}</div>
+                      <ChatMessageBody content={streamDraft.content} variant="ai" />
                     ) : (
                       <div className="mock-thinker">
                         <div className="mock-td" />
@@ -572,34 +717,26 @@ export default function ProjectDetailPage() {
                         <div className="mock-td" />
                       </div>
                     )}
-                    {streamDraft.citations.length > 0 ? (
-                      <div className="mock-cites">
-                        {streamDraft.citations.map((c, i) => (
-                          <div key={i} className="mock-cite">
-                            <div className="mock-cnum">{i + 1}</div>
-                            <div>
-                              <div className="mock-cdoc">{c.document_name ?? "Document"}</div>
-                              <div className="mock-csnip">{c.label ?? ""}</div>
-                              <div className="mock-cpg">{c.page_number != null ? `p. ${c.page_number}` : "p. n/a"}</div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
+                    <ChatCitations
+                      citations={streamDraft.citations}
+                      defaultOpen={streamDraft.stage === "done"}
+                      selectedChunkId={selectedCitation?.chunk_id}
+                      onSelectCitation={onCitationSelect}
+                    />
                   </div>
                 </div>
               ) : null}
 
               <div ref={chatEndRef} />
-            </div>
+              </div>
+            </ScrollArea>
 
-            <div className="mock-inp-area">
-              {chatError ? (
-                <div style={{ color: "#991a1a", fontSize: 11, marginBottom: 8, fontFamily: "var(--font-mono)" }}>{chatError}</div>
-              ) : null}
-              <div className="mock-inp-wrap">
-                <textarea
-                  className="mock-inp"
+            <div className="mock-inp-area border-t bg-background/80 p-3 backdrop-blur-sm">
+              <div className="chat-composer">
+              {chatError ? <p className="mb-2 font-mono text-xs text-destructive">{chatError}</p> : null}
+              <div className="flex items-end gap-2">
+                <Textarea
+                  className="min-h-[44px] max-h-[180px] resize-none text-sm shadow-xs"
                   rows={1}
                   placeholder="Ask a question about your documents…"
                   value={chatInput}
@@ -608,23 +745,28 @@ export default function ProjectDetailPage() {
                   disabled={sending}
                 />
                 {sending ? (
-                  <button type="button" className="mock-btn-ghost" style={{ flexShrink: 0, padding: "6px 10px" }} onClick={stopChatMessage}>
+                  <Button type="button" variant="outline" size="sm" onClick={stopChatMessage}>
+                    <Square className="size-3.5 fill-current" />
                     Stop
-                  </button>
+                  </Button>
                 ) : null}
-                <button type="button" className="mock-snd" aria-label="Send" disabled={sending || !chatInput.trim()} onClick={() => void sendChatMessage()}>
-                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="2" y1="14" x2="14" y2="2" />
-                    <polyline points="6 2 14 2 14 10" />
-                  </svg>
-                </button>
+                <Button
+                  type="button"
+                  size="icon"
+                  aria-label="Send"
+                  disabled={sending || (!chatInput.trim() && pipelineMode !== "summarize")}
+                  onClick={() => void sendChatMessage()}
+                >
+                  <Send className="size-4" />
+                </Button>
               </div>
-              <div className="mock-inp-hint">
+              <div className="mt-2 flex items-center justify-between text-[10px] font-mono text-muted-foreground">
                 <span>⏎ send · shift+⏎ newline</span>
-                <div className="mock-scope">
-                  <div className="mock-sc-dot" />
+                <div className="flex items-center gap-1.5">
+                  <span className="size-1.5 rounded-full bg-primary" />
                   <span>Searching: {project?.name ?? "this project"}</span>
                 </div>
+              </div>
               </div>
             </div>
           </div>

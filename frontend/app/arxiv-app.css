@@ -19,6 +19,12 @@ html[data-mock-theme="dark"] body.app-arxiv {
   color: var(--color-text-primary);
 }
 
+html.app-arxiv-root,
+html.app-arxiv-root body.app-arxiv {
+  height: 100%;
+  overflow: hidden;
+}
+
 body.app-arxiv a {
   color: var(--color-accent, #2b4fa8);
 }
@@ -30,8 +36,12 @@ body.app-arxiv a {
   border-radius: 0;
   border: none;
   border-bottom: 0.5px solid var(--color-border, #d4d0c8);
-  min-height: 100vh;
-  max-height: none;
+  height: 100vh;
+  max-height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .arxiv-mock.arxiv-app-shell .mock-stage {
