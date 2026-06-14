@@ -33,6 +33,7 @@ Professor feedback: optimize for **fast, interactive research chat** instead of 
 - [x] **UI: Fast/Deep toggle**, live stage text, latency summary, **Stop** button (abort stream)
 - [x] **HNSW pgvector index** on `DocumentChunk.embedding` (migration `0002_hnsw_embedding_index`)
 - [x] **Embedding model warm-up** on backend startup (reduces first-query cold start)
+<<<<<<< HEAD
 - [x] **Four pipeline modes** via `pipeline_mode` on chat + dedicated endpoints:
   - **Q&A RAG** (`qa`) — strict top-k retrieval, citations, no full-doc traversal
   - **Full document summarize** (`summarize`) — map-reduce over ALL chunks (hierarchical)
@@ -78,6 +79,17 @@ See also [Pipeline modes guide](docs/PIPELINE_MODES.md).
 ```bash
 pandoc docs/PROJECT_REPORT.md -o PROJECT_REPORT.pdf --metadata title="ASE2026 Project Report"
 ```
+=======
+
+### Remaining
+
+- [ ] Better citation precision (character offsets, snippet highlighting, stronger page mapping)
+- [ ] Access token refresh handling in frontend (auto refresh on 401)
+- [ ] Background job monitoring UI (ingestion progress + retry controls)
+- [ ] Citation click → scroll/highlight source excerpt in document panel
+- [ ] Optional two-phase answer (fast draft → deep refine on demand)
+- [ ] Demo/evaluation page: compare Fast vs Deep latency and quality side-by-side
+>>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
 
 
 
@@ -172,7 +184,11 @@ Django REST API, Celery workers, PostgreSQL + pgvector, and a Next.js UI for pro
 | GET/PATCH/DELETE | `/api/projects/{id}/` | Project detail |
 | GET/POST | `/api/projects/{id}/documents/` | List / upload PDF or DOCX |
 | GET/DELETE | `/api/projects/{id}/documents/{doc_id}/` | Document detail / delete |
+<<<<<<< HEAD
 | POST | `/api/projects/{id}/chat/` | `{ "message", "mode", "pipeline_mode", "document_id?" }` — JSON response |
+=======
+| POST | `/api/projects/{id}/chat/` | `{ "message": "...", "mode": "fast" \| "deep" }` — JSON response |
+>>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
 | POST | `/api/projects/{id}/chat/stream/` | Same body — **SSE** stream (`status` → `token` → `done`) |
 | POST | `/api/projects/{id}/literature-search/` | `{ "query", "mode" }` — exploration report |
 | POST | `/api/projects/{id}/synthesis/` | `{ "query", "mode" }` — multi-paper synthesis |
@@ -203,11 +219,14 @@ Key variables in `.env`:
 - **Ingestion**: Celery task chunks PDF/DOCX, embeds with sentence-transformers, stores rows in `DocumentChunk` with pgvector (HNSW cosine index).
 - **Query**: LangGraph nodes — load memory → embed query → project-filtered cosine retrieval → multi-document context → OpenAI chat → citation list → persist messages.
 - **Streaming chat**: `POST /api/projects/{id}/chat/stream/` returns **SSE** (`text/event-stream`): `status` (pipeline stage + message) → `token` (answer deltas) → `done` (full answer, citations, `message_id`, `latency_ms`). The Next.js UI uses `fetch` + `ReadableStream` (not `EventSource`) so JWT and JSON body work cleanly.
+<<<<<<< HEAD
 - **Pipeline modes** (`pipeline_mode` on chat body):
   - `qa` — vector top-k Q&A with citations (Fast k=3, Deep k=10)
   - `summarize` — hierarchical map-reduce over **all** chunks of `document_id` (Objective / Methodology / Key Findings / Limitations / Conclusion)
   - `literature_search` — ranked exploration across project (Fast k=15, Deep k=25)
   - `synthesis` — cross-document literature review (Fast k=20, Deep k=40)
+=======
+>>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
 - **Fast mode**: fewer chunks + shorter history for lower time-to-first-token; **Deep mode**: more context for thorough answers.
 
 ## Demo script (for presentation)

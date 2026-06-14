@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArxivTopBar } from "@/components/ArxivTopBar";
+<<<<<<< HEAD
 import { ChatCitations } from "@/components/ChatCitations";
 import { ChatMessageBody } from "@/components/ChatMessageBody";
 import { PipelineModeDropdown } from "@/components/PipelineModeDropdown";
@@ -26,6 +27,10 @@ import {
   type PipelineMode,
 } from "@/lib/chat-stream";
 import { Download, FlaskConical, RotateCcw, Send, Sparkles, Square, Upload } from "lucide-react";
+=======
+import { apiJson, getAccessToken, uploadDocument } from "@/lib/api";
+import { chatStageLabel, formatLatencySummary, streamProjectChat, type ChatCitation, type ChatLatencyMs, type ChatMode } from "@/lib/chat-stream";
+>>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
 
 type ProjectRow = {
   id: string;
@@ -111,7 +116,10 @@ export default function ProjectDetailPage() {
   const [chatError, setChatError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [chatMode, setChatMode] = useState<ChatMode>("fast");
+<<<<<<< HEAD
   const [pipelineMode, setPipelineMode] = useState<PipelineMode>("qa");
+=======
+>>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
   const [streamDraft, setStreamDraft] = useState<{
     content: string;
     stage: string;
@@ -246,6 +254,7 @@ export default function ProjectDetailPage() {
     chatAbortRef.current?.abort();
   }
 
+<<<<<<< HEAD
   function onCitationSelect(c: ChatCitation) {
     setSelectedCitation(c);
     if (c.document_id) setSelectedDocId(c.document_id);
@@ -311,6 +320,8 @@ export default function ProjectDetailPage() {
     }
   }
 
+=======
+>>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
   async function sendChatMessage() {
     const text = chatInput.trim();
     if (pipelineMode === "summarize" && !selectedDocId) {
@@ -368,7 +379,11 @@ export default function ProjectDetailPage() {
             setChatError(detail);
           },
         },
+<<<<<<< HEAD
         { signal: controller.signal, mode: chatMode, pipelineMode, documentId: selectedDocId },
+=======
+        { signal: controller.signal, mode: chatMode },
+>>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
       );
       await refreshMessages();
     } catch (err) {
@@ -633,6 +648,7 @@ export default function ProjectDetailPage() {
           <div className="mock-ws-chat flex min-h-0 flex-col">
             <div className="mock-chat-hdr">
               <span>Chat</span>
+<<<<<<< HEAD
               <PipelineModeDropdown
                 pipelineMode={pipelineMode}
                 chatMode={chatMode}
@@ -646,6 +662,31 @@ export default function ProjectDetailPage() {
               <Badge variant="outline" className="max-w-full truncate font-mono text-[10px] font-normal">
                 {pipelineHint()}
               </Badge>
+=======
+              <div className="mock-set-nav" style={{ marginLeft: "auto", marginRight: 8 }}>
+                <button
+                  type="button"
+                  className={chatMode === "fast" ? "is-on" : ""}
+                  onClick={() => setChatMode("fast")}
+                  disabled={sending}
+                  title="Fast mode: fewer chunks, lower latency"
+                >
+                  Fast
+                </button>
+                <button
+                  type="button"
+                  className={chatMode === "deep" ? "is-on" : ""}
+                  onClick={() => setChatMode("deep")}
+                  disabled={sending}
+                  title="Deep mode: more context, slower"
+                >
+                  Deep
+                </button>
+              </div>
+              <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--color-text-muted)" }}>
+                {chatMode === "fast" ? "top-k 3" : "top-k 10"}
+              </span>
+>>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
             </div>
 
             <ScrollArea className="mock-chat-scroll">
@@ -745,6 +786,7 @@ export default function ProjectDetailPage() {
                   disabled={sending}
                 />
                 {sending ? (
+<<<<<<< HEAD
                   <Button type="button" variant="outline" size="sm" onClick={stopChatMessage}>
                     <Square className="size-3.5 fill-current" />
                     Stop
@@ -759,6 +801,18 @@ export default function ProjectDetailPage() {
                 >
                   <Send className="size-4" />
                 </Button>
+=======
+                  <button type="button" className="mock-btn-ghost" style={{ flexShrink: 0, padding: "6px 10px" }} onClick={stopChatMessage}>
+                    Stop
+                  </button>
+                ) : null}
+                <button type="button" className="mock-snd" aria-label="Send" disabled={sending || !chatInput.trim()} onClick={() => void sendChatMessage()}>
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="2" y1="14" x2="14" y2="2" />
+                    <polyline points="6 2 14 2 14 10" />
+                  </svg>
+                </button>
+>>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
               </div>
               <div className="mt-2 flex items-center justify-between text-[10px] font-mono text-muted-foreground">
                 <span>⏎ send · shift+⏎ newline</span>
