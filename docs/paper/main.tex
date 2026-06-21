@@ -39,9 +39,10 @@ trade latency against thoroughness.
 Built with Django REST, Celery, PostgreSQL with pgvector, and a Next.js frontend, the
 platform demonstrates how interactive research workflows can combine generative AI with
 source traceability.
-Evaluation on a two-document project shows Fast Q\&A responses in approximately 3.5\,s with
-three citations versus Deep mode with ten citations at comparable latency, while Deep
-Literature search produces broader thematic reports at higher cost (approximately 29\,s).
+Evaluation on project \emph{AI in Health Care} (3 indexed PDFs, 193 chunks) shows Fast Q\&A
+in approximately 2--4\,s with three citations versus Deep with ten citations at comparable
+latency; Literature and Synthesis run in 5--11\,s; full-document Summarize takes 45\,s--4\,min
+depending on PDF size.
 \end{abstract}
 
 \begin{CCSXML}
@@ -272,21 +273,24 @@ The frontend fetches full chunk text via
 \section{Evaluation}
 \label{sec:eval}
 
-We benchmarked the system on project \emph{AI in Health Care} (2 indexed PDFs, 140 chunks)
-using the built-in \texttt{/chat/benchmark/} endpoint and demo UI.
+We benchmarked the system on project \emph{AI in Health Care} (3 indexed PDFs, 193 chunks)
+using queries from saved chat history and warm \texttt{/chat/benchmark/} runs.
 
-Table~\ref{tab:qa} reports Q\&A latency on warm queries.
-Table~\ref{tab:lit} reports Literature search results.
+Table~\ref{tab:qa} reports Q\&A results.
+Table~\ref{tab:lit} reports Literature search.
+Table~\ref{tab:syn} reports Synthesis.
 
 \begin{table}[t]
-  \caption{Q\&A latency (warm queries).}
+  \caption{Q\&A (healthcare chat queries).}
   \label{tab:qa}
   \small
   \begin{tabular}{@{}lrrrr@{}}
     \toprule
     \textbf{Query} & \textbf{Fast ms} & \textbf{Deep ms} & \textbf{Fast cite.} & \textbf{Deep cite.} \\
     \midrule
-    Methodology described? & 3{,}520 & 3{,}446 & 3 & 10 \\
+    Problem statement? & 2{,}005 & 2{,}249 & 3 & 10 \\
+    What are the Solutions? & 2{,}005 & 4{,}400 & 3 & 10 \\
+    Methodology described? & 3{,}376 & 3{,}803 & 3 & 10 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -299,16 +303,32 @@ Table~\ref{tab:lit} reports Literature search results.
     \toprule
     \textbf{Query} & \textbf{Fast ms} & \textbf{Deep ms} & \textbf{Fast cite.} & \textbf{Deep cite.} \\
     \midrule
-    Themes across papers? & 6{,}726 & 28{,}767 & 15 & 25 \\
+    Themes across papers? & 5{,}047 & 6{,}644 & 15 & 25 \\
+    Main findings? & 8{,}564 & 10{,}654 & 15 & 25 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \caption{Synthesis latency.}
+  \label{tab:syn}
+  \small
+  \begin{tabular}{@{}lrrrr@{}}
+    \toprule
+    \textbf{Query} & \textbf{Fast ms} & \textbf{Deep ms} & \textbf{Fast cite.} & \textbf{Deep cite.} \\
+    \midrule
+    Methodology agreements? & 6{,}225 & 7{,}342 & 20 & 40 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
 \paragraph{Findings.}
-Fast Q\&A delivers interactive responses (3--7\,s warm) with fewer but sufficient citations.
-Deep Q\&A retrieves $3\times$ more chunks with similar latency on short answers.
-Deep Literature produces longer reports at approximately $4\times$ the latency of Fast.
-First query after backend restart incurs a 10--15\,s cold start for embedding model load;
+Fast Q\&A delivers interactive responses (2--4\,s warm) with three citations.
+Deep Q\&A retrieves $3\times$ more chunks (10 vs 3 citations) at similar latency.
+Literature and Synthesis Deep modes add citations (25 vs 15, 40 vs 20) with modest latency
+increase on three papers.
+Summarize on the 17-chunk EPF brief took 45\,s; larger PDFs scale to several minutes.
+First query after backend restart incurs a cold start for embedding model load;
 startup warm-up mitigates this effect.
 
 Qualitative trust checks confirm that citations map to real uploaded pages, unsupported

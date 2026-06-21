@@ -775,23 +775,19 @@ export default function ProjectDetailPage() {
 
             <div className="mock-inp-area border-t bg-background/80 p-3 backdrop-blur-sm">
               <div className="chat-composer">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              {chatError ? <p className="mb-2 font-mono text-xs text-destructive">{chatError}</p> : null}
+              <div className="flex items-end gap-2">
                 <PipelineModeDropdown
                   pipelineMode={pipelineMode}
                   chatMode={chatMode}
                   topKLabel={pipelineTopKLabel()}
+                  hint={pipelineHint()}
                   disabled={sending}
                   onPipelineChange={setPipelineMode}
                   onChatModeChange={setChatMode}
                 />
-                <Badge variant="outline" className="max-w-full truncate font-mono text-[10px] font-normal">
-                  {pipelineHint()}
-                </Badge>
-              </div>
-              {chatError ? <p className="mb-2 font-mono text-xs text-destructive">{chatError}</p> : null}
-              <div className="flex items-end gap-2">
                 <Textarea
-                  className="min-h-[44px] max-h-[180px] resize-none text-sm shadow-xs"
+                  className="min-h-9 max-h-[180px] min-w-0 flex-1 resize-none py-2 text-sm shadow-xs"
                   rows={1}
                   placeholder="Ask a question about your documents…"
                   value={chatInput}
@@ -800,7 +796,7 @@ export default function ProjectDetailPage() {
                   disabled={sending}
                 />
                 {sending ? (
-                  <Button type="button" variant="outline" size="sm" onClick={stopChatMessage}>
+                  <Button type="button" variant="outline" size="sm" className="h-9 shrink-0" onClick={stopChatMessage}>
                     <Square className="size-3.5 fill-current" />
                     Stop
                   </Button>
@@ -808,6 +804,7 @@ export default function ProjectDetailPage() {
                 <Button
                   type="button"
                   size="icon"
+                  className="size-9 shrink-0"
                   aria-label="Send"
                   disabled={sending || (!chatInput.trim() && pipelineMode !== "summarize")}
                   onClick={() => void sendChatMessage()}

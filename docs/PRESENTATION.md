@@ -8,7 +8,7 @@ title: Research Assistant — ASE2026
 # Research Assistant
 ## Real-Time Academic Research Assistant with RAG and Citations
 
-*[Your Name]* · ASE2026 · *[Date]*
+*Behaylu Gebrekidan* · ASE2026 · *21/06/2026*
 
 ---
 
@@ -49,16 +49,18 @@ title: Research Assistant — ASE2026
 
 ## Evaluation
 
-Preliminary benchmarks (2 papers, 140 chunks, demo project):
+Preliminary benchmarks (**AI in Health Care**, 3 PDFs, 193 chunks — chat history + warm runs):
 
 | Mode | Fast | Deep |
 |------|------|------|
-| **Q&A** — methodology question | ~3.5 s · 3 citations | ~3.4 s · 10 citations |
-| **Literature** — themes across papers | ~6.7 s · 15 citations | ~29 s · 25 citations |
-| **Synthesis** — agreements & contradictions | ~7 s · 20 citations | ~7 s · 40 citations |
-| **Summarize** — full document | — | ~30 s – 3 min *(all chunks; no Fast/Deep)* |
+| **Q&A** — problem statement | ~2 s · 3 citations | ~2 s · 10 citations |
+| **Q&A** — solutions | ~2 s · 3 citations | ~4 s · 10 citations |
+| **Literature** — themes across papers | ~5 s · 15 citations | ~7 s · 25 citations |
+| **Literature** — main findings | ~9 s · 15 citations | ~11 s · 25 citations |
+| **Synthesis** — agreements & contradictions | ~6 s · 20 citations | ~7 s · 40 citations |
+| **Summarize** — EPF brief (17 chunks) | — | ~45 s *(all chunks; no Fast/Deep)* |
 
-**Findings:** Fast suits interactive Q&A and exploration; Deep adds **more source coverage** (especially Literature); Synthesis doubles citations at similar latency; Summarize is slower by design (map-reduce over the whole PDF).
+**Findings:** Fast suits interactive Q&A (~2–4 s); Deep adds **more source coverage**; Literature/Synthesis scale with corpus size; Summarize is slower by design (map-reduce over the whole PDF).
 
 *Preliminary evaluation — not a formal user study.*
 

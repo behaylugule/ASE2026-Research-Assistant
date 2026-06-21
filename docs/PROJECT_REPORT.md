@@ -13,7 +13,7 @@
 
 ## Abstract
 
-The volume of academic publications has made literature review increasingly time-consuming, while many AI assistants produce answers without verifiable sources. This project implements a **Retrieval-Augmented Generation (RAG)** platform that lets researchers upload PDF and DOCX documents, ask questions in natural language, and receive **streaming, citation-grounded** responses. The system supports four pipeline modes—Q&A, full-document Summarize, Literature search, and multi-paper Synthesis—and offers **Fast** and **Deep** retrieval settings to trade latency against thoroughness. Built with Django REST, Celery, PostgreSQL with pgvector, and a Next.js frontend, the platform demonstrates how interactive research workflows can combine generative AI with source traceability. Evaluation on a two-document project shows Fast Q&A responses in ~3.5 s with three citations versus Deep mode with ten citations at comparable latency, while Deep Literature search produces broader thematic reports at higher cost (~29 s).
+The volume of academic publications has made literature review increasingly time-consuming, while many AI assistants produce answers without verifiable sources. This project implements a **Retrieval-Augmented Generation (RAG)** platform that lets researchers upload PDF and DOCX documents, ask questions in natural language, and receive **streaming, citation-grounded** responses. The system supports four pipeline modes—Q&A, full-document Summarize, Literature search, and multi-paper Synthesis—and offers **Fast** and **Deep** retrieval settings to trade latency against thoroughness. Built with Django REST, Celery, PostgreSQL with pgvector, and a Next.js frontend, the platform demonstrates how interactive research workflows can combine generative AI with source traceability. Evaluation on project **AI in Health Care** (3 PDFs, 193 chunks) shows Fast Q&A in ~2–4 s with three citations versus Deep with ten citations at comparable latency; Literature and Synthesis modes run in ~5–11 s with 15–40 citations depending on depth; full-document Summarize takes ~45 s–4 min depending on PDF size.
 
 **Keywords:** RAG, academic research assistant, citations, pgvector, streaming LLM, literature review
 
@@ -220,26 +220,44 @@ After a Fast Q&A answer, users can trigger `POST /api/projects/{id}/chat/refine/
 
 ## 9. Evaluation
 
-Benchmarks were run on project **AI in Health Care** (2 indexed PDFs, 140 chunks). See [EVALUATION_RESULTS.md](./EVALUATION_RESULTS.md) for full tables.
+Benchmarks were run on project **AI in Health Care** (3 indexed PDFs, 193 chunks). Queries and citation counts from saved chat history; latency from warm `/chat/benchmark/` runs. See [EVALUATION_RESULTS.md](./EVALUATION_RESULTS.md) for full tables.
 
-**Table 3 — Q&A latency (warm queries)**
+**Table 3 — Q&A (chat queries + benchmark latency)**
 
 | Query | Fast (ms) | Deep (ms) | Fast citations | Deep citations |
 |-------|----------:|----------:|---------------:|---------------:|
-| What methodology is described? | 3,520 | 3,446 | 3 | 10 |
+| what is the problem statment | 2,005 | 2,249 | 3 | 10 |
+| What are the Solutions | 2,005 | 4,400 | 3 | 10 |
+| What methodology is described? | 3,376 | 3,803 | 3 | 10 |
 
 **Table 4 — Literature search**
 
 | Query | Fast (ms) | Deep (ms) | Fast citations | Deep citations |
 |-------|----------:|----------:|---------------:|---------------:|
-| What themes appear across papers? | 6,726 | 28,767 | 15 | 25 |
+| What themes appear across these papers? | 5,047 | 6,644 | 15 | 25 |
+| What are the main findings across my uploaded papers? | 8,564 | 10,654 | 15 | 25 |
+
+**Table 5 — Synthesis**
+
+| Query | Fast (ms) | Deep (ms) | Fast citations | Deep citations |
+|-------|----------:|----------:|---------------:|---------------:|
+| Compare agreements and contradictions on methodology | 6,225 | 7,342 | 20 | 40 |
+
+**Table 6 — Summarize (single document, all chunks)**
+
+| Document | Chunks | Latency (ms) |
+|----------|-------:|-------------:|
+| EPF AI in healthcare brief | 17 | 45,273 |
+| R48319.1 | 67 | 158,805 |
+| 9a31d8af-en | 109 | 263,353 |
 
 **Findings**
 
-- **Fast Q&A** delivers interactive responses (~3–7 s warm) with fewer but sufficient citations for quick checks.
-- **Deep Q&A** retrieves 3× more chunks with similar latency on short answers.
-- **Deep Literature** produces longer, more comprehensive reports at ~4× latency vs Fast.
-- **Cold start** (first embed after restart) can add ~10–15 s; mitigated by embedding warm-up on backend startup.
+- **Fast Q&A** delivers interactive responses (~2–4 s warm) with 3 citations for quick checks.
+- **Deep Q&A** retrieves 3× more chunks (10 vs 3 citations) at similar latency on short answers.
+- **Literature / Synthesis** scale with corpus size; Deep adds citations (25 vs 15, 40 vs 20) with modest latency increase on 3 papers.
+- **Summarize** latency grows with document size (~45 s for 17 chunks up to ~4 min for 109 chunks).
+- **Cold start** (first embed after restart) can add ~10 s; mitigated by embedding warm-up on backend startup.
 
 Qualitative trust checks: citations map to real uploaded pages; unsupported questions return the exact not-found phrase; citation clicks open highlighted excerpts.
 
@@ -249,9 +267,9 @@ Qualitative trust checks: citations map to real uploaded pages; unsupported ques
 
 Recommended presentation flow:
 
-1. Register/login → create project → upload 2 PDFs → wait for **Indexed**
-2. Q&A (Fast): *What is the main contribution of the first paper?* — show streaming and latency
-3. Follow-up question — demonstrate conversation memory
+1. Register/login → create project → upload PDFs → wait for **Indexed**
+2. Q&A (Fast): *what is the problem statment* — show streaming and citations
+3. Follow-up: *What are the Solutions* — compare Fast vs Deep citation count
 4. Click citation — show excerpt highlight panel
 5. Literature (Fast): *What themes appear across these papers?*
 6. Synthesis (Deep): *Compare agreements and contradictions on methodology*

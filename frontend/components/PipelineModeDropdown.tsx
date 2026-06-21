@@ -35,6 +35,7 @@ type Props = {
   pipelineMode: PipelineMode;
   chatMode: ChatMode;
   topKLabel: string;
+  hint?: string;
   disabled?: boolean;
   className?: string;
   onPipelineChange: (mode: PipelineMode) => void;
@@ -45,6 +46,7 @@ export function PipelineModeDropdown({
   pipelineMode,
   chatMode,
   topKLabel,
+  hint,
   disabled,
   className,
   onPipelineChange,
@@ -55,15 +57,24 @@ export function PipelineModeDropdown({
   const modeLabel = chatMode === "fast" ? "Fast" : "Deep";
 
   return (
-    <div className={cn("flex flex-wrap items-center gap-2", className)}>
+    <div className={cn("flex shrink-0 items-center gap-1.5", className)}>
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" disabled={disabled} className="h-8 gap-1.5 font-normal shadow-xs">
-            <PipelineIcon className="size-3.5 text-muted-foreground" />
-            <span>{pipeline.label}</span>
-            <ChevronDown className="size-3.5 text-muted-foreground opacity-70" />
-          </Button>
-        </DropdownMenuTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" disabled={disabled} className="h-9 gap-1.5 font-normal shadow-xs">
+                <PipelineIcon className="size-3.5 text-muted-foreground" />
+                <span className="hidden sm:inline">{pipeline.label}</span>
+                <ChevronDown className="size-3.5 text-muted-foreground opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          {hint ? (
+            <TooltipContent side="top" className="max-w-xs text-xs">
+              {hint}
+            </TooltipContent>
+          ) : null}
+        </Tooltip>
         <DropdownMenuContent align="start" side="top" className="min-w-[160px]">
           <DropdownMenuLabel className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
             Pipeline
@@ -87,11 +98,12 @@ export function PipelineModeDropdown({
         </DropdownMenuContent>
       </DropdownMenu>
 
+      {pipelineMode !== "summarize" ? (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" disabled={disabled} className="h-8 gap-1.5 font-normal shadow-xs">
+          <Button variant="outline" size="sm" disabled={disabled} className="h-9 gap-1.5 font-normal shadow-xs">
             <Gauge className="size-3.5 text-muted-foreground" />
-            <span>{modeLabel}</span>
+            <span className="hidden sm:inline">{modeLabel}</span>
             <ChevronDown className="size-3.5 text-muted-foreground opacity-70" />
           </Button>
         </DropdownMenuTrigger>
@@ -115,10 +127,23 @@ export function PipelineModeDropdown({
           })}
         </DropdownMenuContent>
       </DropdownMenu>
-
+      ) : (
       <Tooltip>
         <TooltipTrigger asChild>
-          <Badge variant="secondary" className="hidden font-mono text-[10px] font-normal sm:inline-flex">
+          <Badge variant="secondary" className="h-9 px-2 font-mono text-[10px] font-normal">
+            {topKLabel}
+          </Badge>
+        </TooltipTrigger>
+        <TooltipContent side="top" className="text-xs">
+          Full document — all chunks
+        </TooltipContent>
+      </Tooltip>
+      )}
+
+      {pipelineMode !== "summarize" ? (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Badge variant="secondary" className="hidden h-9 px-2 font-mono text-[10px] font-normal md:inline-flex">
             {topKLabel}
           </Badge>
         </TooltipTrigger>
@@ -126,6 +151,7 @@ export function PipelineModeDropdown({
           Chunks retrieved per query
         </TooltipContent>
       </Tooltip>
+      ) : null}
     </div>
   );
 }
