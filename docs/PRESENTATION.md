@@ -2,249 +2,102 @@
 marp: true
 theme: default
 paginate: true
-title: Real-Time Academic Research Assistant
-description: ASE2026 Project Presentation
+title: Research Assistant — ASE2026
 ---
 
-# Real-Time Interactive Academic Research Assistant with RAG and Citations
+# Research Assistant
+## Real-Time Academic Research Assistant with RAG and Citations
 
-**ASE2026 — Advanced Software Engineering**
-
-*[Your Name]* · *[Date]*
+*[Your Name]* · ASE2026 · *[Date]*
 
 ---
 
 ## Agenda
 
-1. Problem & motivation
-2. Project objectives (proposal alignment)
-3. System overview & architecture
-4. **Live demo**
-5. Four pipeline modes
-6. Fast vs Deep evaluation
-7. Trust & citations
-8. Limitations & future work
-9. Q&A
+1. Problem
+2. Solution
+3. Evaluation
+4. Limitations
+5. Future work
+6. Conclusion
 
 ---
 
-## The problem
+## Problem
 
-- Academic publication volume is exploding
-- Literature review is **slow** and **manual**
-- Generic AI chatbots:
-  - Hallucinate facts
-  - Provide **no verifiable citations**
-  - Optimize for quality, not **interactive speed**
+- **Information overload** — too many papers, too little time
+- **Untrusted AI** — fluent answers often lack **verifiable citations**
+- **Slow interaction** — long waits break iterative research (ask → read → follow up)
 
-> *"Researchers need fast, trustworthy answers grounded in their own documents."*
+**Target users:** students & researchers working on a **defined set of uploaded papers**.
 
 ---
 
-## Our solution
+## Solution
 
-An **AI-powered research assistant** built on **Retrieval-Augmented Generation (RAG)**:
+**Research Assistant** — RAG-based platform over **your own documents**:
 
-- Upload PDFs/DOCX into project-scoped libraries
-- Ask questions with **streaming** responses
-- Get **inline citations** tied to source pages
-- Four modes: Q&A · Summarize · Literature · Synthesis
+- Upload PDFs/DOCX → ask in natural language
+- **Four modes:** Q&A · Summarize · Literature · Synthesis
+- **Citations** on every answer — click to view the source excerpt
+- **Fast / Deep** — quick exploration vs thorough answers
+- **Streaming chat** — real-time responses while you research
 
-**Differentiator:** optimized for **time-to-first-response** and continuous conversation flow.
-
----
-
-## Proposal alignment
-
-| Proposal objective | Implementation |
-|--------------------|----------------|
-| Reduce research time | Fast mode, streaming SSE, async ingestion |
-| Improve accuracy | RAG + project-scoped retrieval only |
-| Ensure scalability | Celery workers, pgvector HNSW, Docker Compose |
-| Enhance trust | Citations, excerpt panel, "not found" when unsupported |
+*Retrieve relevant passages first, then generate — grounded in your library, not the open web.*
 
 ---
 
-## Architecture
+## Evaluation
 
-```
-┌─────────────┐     JWT/SSE      ┌──────────────┐
-│  Next.js UI │ ◄──────────────► │ Django REST  │
-└─────────────┘                  └──────┬───────┘
-                                        │
-                    ┌───────────────────┼───────────────────┐
-                    ▼                   ▼                   ▼
-              PostgreSQL            Redis              OpenAI
-              + pgvector           Celery            Chat API
-              (chunks/embed)      (ingestion)
-```
+Preliminary benchmarks (2 papers, 140 chunks, demo project):
 
-See full diagrams: [ARCHITECTURE.md](./ARCHITECTURE.md)
+| Mode | Fast | Deep |
+|------|------|------|
+| **Q&A** — methodology question | ~3.5 s · 3 citations | ~3.4 s · 10 citations |
+| **Literature** — themes across papers | ~6.7 s · 15 citations | ~29 s · 25 citations |
+| **Synthesis** — agreements & contradictions | ~7 s · 20 citations | ~7 s · 40 citations |
+| **Summarize** — full document | — | ~30 s – 3 min *(all chunks; no Fast/Deep)* |
 
----
+**Findings:** Fast suits interactive Q&A and exploration; Deep adds **more source coverage** (especially Literature); Synthesis doubles citations at similar latency; Summarize is slower by design (map-reduce over the whole PDF).
 
-## RAG pipeline (Q&A)
-
-1. **Load** recent chat history
-2. **Embed** user question (local sentence-transformers)
-3. **Retrieve** top-k chunks (cosine similarity, project-filtered)
-4. **Aggregate** excerpts grouped by document
-5. **Generate** answer with inline citations (OpenAI)
-6. **Stream** tokens via SSE → save to chat history
-
-Status events: `memory → embed → retrieve → generate → save → done`
-
----
-
-## Four pipeline modes
-
-| Mode | Best for | Retrieval |
-|------|----------|-----------|
-| **Q&A** | Specific factual questions | Top-k chunks |
-| **Summarize** | Full overview of one paper | All chunks (map-reduce) |
-| **Literature** | Discover themes across papers | Top 15 / 25 |
-| **Synthesis** | Multi-paper lit review | Top 20 / 40 |
-
-```
-One fact?          → Q&A
-One paper overview → Summarize
-What's relevant?   → Literature
-How do they relate?→ Synthesis
-```
-
----
-
-## Live demo plan
-
-1. Upload 2 PDFs → wait for **Indexed**
-2. **Q&A (Fast):** *What is the main contribution?*
-   - Show streaming + latency (TTFT / total)
-3. **Follow-up question** → conversation memory
-4. **Click citation** → excerpt highlight
-5. **Literature:** *What themes appear across these papers?*
-6. **Synthesis (Deep):** *Compare methodology agreements & contradictions*
-7. **Summarize** one document → structured sections
-
-Backup: record a 2-min screen capture beforehand.
-
----
-
-## Fast vs Deep
-
-| Setting | Q&A | Literature | Synthesis |
-|---------|-----|------------|-----------|
-| **Fast** | k=3 | k=15 | k=20 |
-| **Deep** | k=10 | k=25 | k=40 |
-
-**Fast** — lower latency, interactive chat  
-**Deep** — more context, thorough answers  
-**Refine with Deep** — upgrade a Fast draft on demand
-
----
-
-## Evaluation results (sample)
-
-**Q&A — warm queries**
-
-| Query | Mode | Latency | Citations |
-|-------|------|--------:|----------:|
-| What methodology is described? | Fast | 3.5 s | 3 |
-| What methodology is described? | Deep | 3.4 s | 10 |
-
-**Literature**
-
-| Query | Mode | Latency | Citations |
-|-------|------|--------:|----------:|
-| Themes across papers | Fast | 6.7 s | 15 |
-| Themes across papers | Deep | 28.8 s | 25 |
-
-Full tables: [EVALUATION_RESULTS.md](./EVALUATION_RESULTS.md)
-
-Demo page: `/projects/{id}/demo`
-
----
-
-## Trust & citations
-
-- Every claim tied to `[DocumentName – Page N]`
-- **Sources** panel below each answer (expandable)
-- Click citation → **excerpt panel** with highlighted text
-- **"Not found in the provided documents"** when context lacks support
-- No web search — answers come only from **your uploads**
-
----
-
-## Tech stack
-
-| Component | Choice |
-|-----------|--------|
-| Frontend | Next.js, Tailwind, shadcn/ui |
-| Backend | Django REST + JWT |
-| Jobs | Celery + Redis |
-| Vectors | PostgreSQL pgvector (HNSW) |
-| Embeddings | sentence-transformers (local CPU) |
-| LLM | OpenAI gpt-4o-mini |
-| Deploy | Docker Compose |
+*Preliminary evaluation — not a formal user study.*
 
 ---
 
 ## Limitations
 
-- Project-scoped only (not Google Scholar / arXiv search)
-- PDF and DOCX ingestion; quality depends on extraction
-- Requires OpenAI API key for generation
-- No formal user study yet (qualitative demo evaluation only)
-- Summarize is slowest mode (reads entire document)
+- Only **uploaded project documents** (not web / arXiv search)
+- **Small-scale evaluation** — no user study or citation-precision audit
+- PDF text quality varies; scanned pages need OCR (not included)
+- Model can still misread context — **user must verify citations**
+- Full-document Summarize is slower by design
 
 ---
 
 ## Future work
 
-- Production deployment (HTTPS, secrets, monitoring)
-- PDF viewer with true page scroll
-- Formal evaluation: citation precision, user study
-- Hybrid retrieval (BM25 + vector)
-- Optional reranking in Deep mode only
+- Formal **user study** (task time vs manual reading)
+- Measure **citation precision**
+- Full PDF page viewer
+- Production deployment for courses / research labs
+- Hybrid keyword + semantic retrieval
 
 ---
 
 ## Conclusion
 
-We built a **real-time, citation-grounded research assistant** that goes beyond the original proposal:
+We built a **citation-grounded research assistant** that addresses the proposal goals:
 
-- Four specialized pipeline modes for different research tasks
-- Fast/Deep latency–quality tradeoff with measurable benchmarks
-- Streaming UX with verifiable source tracing
+- ✅ Reduce research time (Fast mode, streaming, four workflows)
+- ✅ Improve accuracy through **RAG** on user documents
+- ✅ Enhance **trust** with inline citations and source excerpts
 
-**Repository:** ASE2026 · **Docs:** `docs/PIPELINE_MODES.md`, `docs/PROJECT_REPORT.md`
+**Claim:** Interactive literature work needs AI that is **fast enough to use** and **trustworthy enough for academia**.
 
 ---
 
 ## Thank you — Questions?
 
-**Demo:** http://localhost:3000  
-**API health:** http://localhost:8000/health/
+**Research Assistant** · Demo: `http://localhost:3000`
 
----
-
-<!-- Speaker notes (not shown on slides) -->
-
-<!--
-SLIDE 1: Introduce yourself and the project title. Mention this is ASE2026 capstone work.
-
-SLIDE 4: Emphasize trust — professors care about hallucination problem.
-
-SLIDE 6: Walk through proposal PDF section by section — show you delivered what you promised plus more.
-
-SLIDE 8: Don't read every step — point to the flow diagram.
-
-SLIDE 10: This is the longest part of the presentation — LIVE DEMO. Have PDFs pre-uploaded.
-
-SLIDE 12: Show the demo page if live API is slow.
-
-SLIDE 13: Click a citation during demo — this is your "wow" moment.
-
-SLIDE 16: Be honest about limitations — shows engineering maturity.
-
-SLIDE 17: Keep future work to 3 bullets max when speaking.
--->
+Q&A prep: [PRESENTATION_QA.md](./PRESENTATION_QA.md)

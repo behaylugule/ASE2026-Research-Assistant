@@ -36,6 +36,7 @@ type Props = {
   chatMode: ChatMode;
   topKLabel: string;
   disabled?: boolean;
+  className?: string;
   onPipelineChange: (mode: PipelineMode) => void;
   onChatModeChange: (mode: ChatMode) => void;
 };
@@ -45,6 +46,7 @@ export function PipelineModeDropdown({
   chatMode,
   topKLabel,
   disabled,
+  className,
   onPipelineChange,
   onChatModeChange,
 }: Props) {
@@ -53,7 +55,7 @@ export function PipelineModeDropdown({
   const modeLabel = chatMode === "fast" ? "Fast" : "Deep";
 
   return (
-    <div className="ml-auto flex items-center gap-2">
+    <div className={cn("flex flex-wrap items-center gap-2", className)}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" disabled={disabled} className="h-8 gap-1.5 font-normal shadow-xs">
@@ -62,7 +64,7 @@ export function PipelineModeDropdown({
             <ChevronDown className="size-3.5 text-muted-foreground opacity-70" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[160px]">
+        <DropdownMenuContent align="start" side="top" className="min-w-[160px]">
           <DropdownMenuLabel className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
             Pipeline
           </DropdownMenuLabel>
@@ -93,7 +95,7 @@ export function PipelineModeDropdown({
             <ChevronDown className="size-3.5 text-muted-foreground opacity-70" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="min-w-[120px]">
+        <DropdownMenuContent align="start" side="top" className="min-w-[120px]">
           <DropdownMenuLabel className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
             Depth
           </DropdownMenuLabel>
@@ -120,7 +122,7 @@ export function PipelineModeDropdown({
             {topKLabel}
           </Badge>
         </TooltipTrigger>
-        <TooltipContent side="bottom" className="text-xs">
+        <TooltipContent side="top" className="text-xs">
           Chunks retrieved per query
         </TooltipContent>
       </Tooltip>

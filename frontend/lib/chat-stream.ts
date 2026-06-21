@@ -4,8 +4,6 @@ export type ChatMode = "fast" | "deep";
 
 export type PipelineMode = "qa" | "summarize" | "literature_search" | "synthesis";
 
-export type ChatMode = "fast" | "deep";
-
 export type ChatCitation = {
   label?: string;
   document_name?: string;
@@ -31,12 +29,6 @@ export type ChatLatencyMs = {
   total?: number | null;
 };
 
-export type ChatLatencyMs = {
-  ttft?: number | null;
-  pregenerate?: number | null;
-  total?: number | null;
-};
-
 export type ChatStreamHandlers = {
   onStatus?: (stage: string, message?: string) => void;
   onToken?: (content: string) => void;
@@ -45,11 +37,8 @@ export type ChatStreamHandlers = {
     citations: ChatCitation[];
     message_id?: string;
     mode?: ChatMode;
-<<<<<<< HEAD
     pipeline_mode?: PipelineMode;
     refined?: boolean;
-=======
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
     latency_ms?: ChatLatencyMs;
     error?: string | null;
   }) => void;
@@ -91,7 +80,6 @@ function dispatchPayload(payload: Record<string, unknown>, handlers: ChatStreamH
       citations: Array.isArray(payload.citations) ? (payload.citations as ChatCitation[]) : [],
       message_id: typeof payload.message_id === "string" ? payload.message_id : undefined,
       mode: payload.mode === "deep" ? "deep" : "fast",
-<<<<<<< HEAD
       pipeline_mode:
         payload.pipeline_mode === "summarize" ||
         payload.pipeline_mode === "literature_search" ||
@@ -99,8 +87,6 @@ function dispatchPayload(payload: Record<string, unknown>, handlers: ChatStreamH
           ? (payload.pipeline_mode as PipelineMode)
           : "qa",
       refined: payload.refined === true,
-=======
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
       latency_ms:
         payload.latency_ms && typeof payload.latency_ms === "object"
           ? (payload.latency_ms as ChatLatencyMs)
@@ -114,49 +100,8 @@ function dispatchPayload(payload: Record<string, unknown>, handlers: ChatStreamH
   }
 }
 
-<<<<<<< HEAD
 async function readSseStream(res: Response, handlers: ChatStreamHandlers) {
   if (!res.body) throw new Error("Streaming not supported by this browser");
-=======
-/**
- * POST + SSE (fetch ReadableStream). Prefer over EventSource for JWT + JSON body.
- */
-export async function streamProjectChat(
-  projectId: string,
-  message: string,
-  handlers: ChatStreamHandlers,
-  options: { signal?: AbortSignal; mode?: ChatMode } = {},
-): Promise<void> {
-  const { signal, mode = "fast" } = options;
-  const token = getAccessToken();
-  const res = await fetch(`${API_BASE}/api/projects/${projectId}/chat/stream/`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify({ message, mode }),
-    signal,
-  });
-
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const err = (await res.json()) as { detail?: unknown };
-      if (typeof err.detail === "string") detail = err.detail;
-      else if (Array.isArray(err.detail)) detail = JSON.stringify(err.detail);
-    } catch {
-      /* ignore */
-    }
-    throw new Error(detail || `HTTP ${res.status}`);
-  }
-
-  if (!res.body) {
-    throw new Error("Streaming not supported by this browser");
-  }
-
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -195,7 +140,6 @@ export async function streamProjectChat(
   }
 }
 
-<<<<<<< HEAD
 export async function streamProjectChat(
   projectId: string,
   message: string,
@@ -281,8 +225,6 @@ export async function runChatBenchmark(
   });
 }
 
-=======
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
 export function chatStageLabel(stage: string, message?: string): string {
   if (message) return message;
   switch (stage) {

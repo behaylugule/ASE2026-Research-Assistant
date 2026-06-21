@@ -102,6 +102,29 @@ export async function retryDocument(projectId: string, documentId: string): Prom
   return apiJson(`/api/projects/${projectId}/documents/${documentId}/retry/`, { method: "POST" });
 }
 
+export type Project = { id: string; name: string; created_at: string };
+
+export async function updateProject(projectId: string, name: string): Promise<Project> {
+  return apiJson<Project>(`/api/projects/${projectId}/`, {
+    method: "PATCH",
+    json: { name },
+  });
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  const res = await authFetch(`/api/projects/${projectId}/`, { method: "DELETE" });
+  if (!res.ok) {
+    let detail: string = res.statusText;
+    try {
+      const err = (await res.json()) as { detail?: unknown };
+      if (typeof err.detail === "string") detail = err.detail;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(detail || `HTTP ${res.status}`);
+  }
+}
+
 export type ChunkDetail = {
   chunk_id: string;
   document_id: string;

@@ -8,31 +8,21 @@ from rest_framework.views import APIView
 
 from apps.projects.permissions import ProjectMemberPermission, get_user_project
 from apps.rag.config import normalize_mode
-<<<<<<< HEAD
 from apps.rag.pipeline_modes import normalize_pipeline_mode
 from apps.rag.pipeline_runner import iter_pipeline_stream, run_pipeline
 from apps.rag.pipelines.qa import iter_qa_refine_stream
-=======
-from apps.rag.graph import iter_research_graph_stream, run_research_graph
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
 from apps.rag.sse import sse_event
 
 from .models import ChatMessage, ChatRole
 from .serializers import ChatMessageSerializer
 
 
-<<<<<<< HEAD
 def _chat_event_stream(project_id, user_id, message, mode, pipeline_mode, document_id):
     for payload in iter_pipeline_stream(
-=======
-def _chat_event_stream(project_id, user_id, message: str, mode: str):
-    for payload in iter_research_graph_stream(
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
         project_id=project_id,
         user_id=user_id,
         query=message,
         mode=mode,
-<<<<<<< HEAD
         pipeline_mode=pipeline_mode,
         document_id=document_id,
     ):
@@ -47,8 +37,6 @@ def _refine_event_stream(project_id, user_id, query, draft, refined_from):
         query=query,
         draft_answer=draft,
         refined_from=refined_from,
-=======
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
     ):
         event_type = payload.get("type", "message")
         yield sse_event(str(event_type), payload)
@@ -75,7 +63,6 @@ class ChatView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         mode = normalize_mode(request.data.get("mode"))
-<<<<<<< HEAD
         pipeline_mode = normalize_pipeline_mode(request.data.get("pipeline_mode"))
         document_id = request.data.get("document_id")
         result = run_pipeline(
@@ -85,13 +72,6 @@ class ChatView(APIView):
             mode=mode,
             pipeline_mode=pipeline_mode,
             document_id=str(document_id) if document_id else None,
-=======
-        result = run_research_graph(
-            project_id=str(project.id),
-            user_id=request.user.id,
-            query=message,
-            mode=mode,
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
         )
         return Response(
             {
@@ -101,10 +81,7 @@ class ChatView(APIView):
                 "message_id": result.get("assistant_message_id"),
                 "error": result.get("error"),
                 "mode": mode,
-<<<<<<< HEAD
                 "pipeline_mode": pipeline_mode,
-=======
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
             },
             status=status.HTTP_200_OK,
         )
@@ -124,7 +101,6 @@ class ChatStreamView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
         mode = normalize_mode(request.data.get("mode"))
-<<<<<<< HEAD
         document_id = request.data.get("document_id")
         response = StreamingHttpResponse(
             _chat_event_stream(
@@ -135,10 +111,6 @@ class ChatStreamView(APIView):
                 pipeline_mode,
                 str(document_id) if document_id else None,
             ),
-=======
-        response = StreamingHttpResponse(
-            _chat_event_stream(str(project.id), request.user.id, message, mode),
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
             content_type="text/event-stream; charset=utf-8",
         )
         response["Cache-Control"] = "no-cache, no-transform"

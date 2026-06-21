@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArxivTopBar } from "@/components/ArxivTopBar";
+import { ProjectEditModal } from "@/components/ProjectEditModal";
+import { ProjectSidebarRow } from "@/components/ProjectSidebarRow";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { apiJson, clearTokens, getAccessToken } from "@/lib/api";
+import { apiJson, clearTokens, deleteProject, getAccessToken, updateProject } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { LogOut, Plus } from "lucide-react";
 
@@ -23,6 +25,8 @@ export default function ProjectsPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [selectedEmoji, setSelectedEmoji] = useState(0);
   const [userAv, setUserAv] = useState("·");
 
@@ -67,7 +71,7 @@ export default function ProjectsPage() {
     try {
       const p = await apiJson<Project>("/api/projects/", {
         method: "POST",
-        json: { name },
+        json: { name: name.trim() },
       });
       setName("");
       setModalOpen(false);
@@ -81,6 +85,26 @@ export default function ProjectsPage() {
   function logout() {
     clearTokens();
     router.push("/login");
+  }
+
+  function openEditProject(p: Project, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditingProject(p);
+    setEditModalOpen(true);
+  }
+
+  async function saveProjectName(name: string) {
+    if (!editingProject) return;
+    const updated = await updateProject(editingProject.id, name);
+    setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+  }
+
+  async function removeProject() {
+    if (!editingProject) return;
+    await deleteProject(editingProject.id);
+    setProjects((prev) => prev.filter((p) => p.id !== editingProject.id));
+    setEditingProject(null);
   }
 
   if (loading) {
@@ -106,11 +130,13 @@ export default function ProjectsPage() {
             New project
           </Button>
           {projects.map((p, i) => (
-            <Link key={p.id} href={`/projects/${p.id}`} className="mock-proj-row">
-              <span className="mock-proj-ico">{EMOJIS[i % EMOJIS.length]}</span>
-              <span className="mock-proj-name">{p.name}</span>
-              <span className="mock-proj-cnt"> </span>
-            </Link>
+            <ProjectSidebarRow
+              key={p.id}
+              name={p.name}
+              emoji={EMOJIS[i % EMOJIS.length]}
+              href={`/projects/${p.id}`}
+              onEdit={(e) => openEditProject(p, e)}
+            />
           ))}
           <div className="mt-auto border-t p-3">
             <Button type="button" variant="ghost" size="sm" className="h-8 w-full justify-start font-mono text-xs text-primary" onClick={logout}>
@@ -181,6 +207,20 @@ export default function ProjectsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <ProjectEditModal
+        open={editModalOpen}
+        title="Edit project"
+        description="Rename or delete this project."
+        initialName={editingProject?.name ?? ""}
+        submitLabel="Save"
+        onClose={() => {
+          setEditModalOpen(false);
+          setEditingProject(null);
+        }}
+        onSubmit={saveProjectName}
+        onDelete={editingProject ? removeProject : undefined}
+      />
     </div>
   );
 }

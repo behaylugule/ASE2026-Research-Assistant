@@ -4,17 +4,17 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArxivTopBar } from "@/components/ArxivTopBar";
-<<<<<<< HEAD
 import { ChatCitations } from "@/components/ChatCitations";
 import { ChatMessageBody } from "@/components/ChatMessageBody";
 import { PipelineModeDropdown } from "@/components/PipelineModeDropdown";
+import { ProjectEditModal } from "@/components/ProjectEditModal";
+import { ProjectSidebarRow } from "@/components/ProjectSidebarRow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { DocumentExcerptPanel } from "@/components/DocumentExcerptPanel";
-import { apiJson, getAccessToken, retryDocument, uploadDocument } from "@/lib/api";
+import { apiJson, deleteProject, getAccessToken, retryDocument, updateProject, uploadDocument } from "@/lib/api";
 import {
   chatStageLabel,
   formatLatencySummary,
@@ -26,11 +26,7 @@ import {
   type ChatMode,
   type PipelineMode,
 } from "@/lib/chat-stream";
-import { Download, FlaskConical, RotateCcw, Send, Sparkles, Square, Upload } from "lucide-react";
-=======
-import { apiJson, getAccessToken, uploadDocument } from "@/lib/api";
-import { chatStageLabel, formatLatencySummary, streamProjectChat, type ChatCitation, type ChatLatencyMs, type ChatMode } from "@/lib/chat-stream";
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
+import { Download, FlaskConical, Pencil, RotateCcw, Send, Sparkles, Square, Upload } from "lucide-react";
 
 type ProjectRow = {
   id: string;
@@ -116,10 +112,9 @@ export default function ProjectDetailPage() {
   const [chatError, setChatError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [chatMode, setChatMode] = useState<ChatMode>("fast");
-<<<<<<< HEAD
   const [pipelineMode, setPipelineMode] = useState<PipelineMode>("qa");
-=======
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<ProjectRow | null>(null);
   const [streamDraft, setStreamDraft] = useState<{
     content: string;
     stage: string;
@@ -254,7 +249,6 @@ export default function ProjectDetailPage() {
     chatAbortRef.current?.abort();
   }
 
-<<<<<<< HEAD
   function onCitationSelect(c: ChatCitation) {
     setSelectedCitation(c);
     if (c.document_id) setSelectedDocId(c.document_id);
@@ -320,8 +314,41 @@ export default function ProjectDetailPage() {
     }
   }
 
-=======
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
+  async function saveProjectName(name: string) {
+    const target = editingProject ?? project;
+    if (!target) return;
+    const updated = await updateProject(target.id, name);
+    setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)));
+    if (target.id === id) setProject(updated);
+    setEditingProject(updated);
+  }
+
+  async function removeProject() {
+    const target = editingProject ?? project;
+    if (!target) return;
+    const deletedId = target.id;
+    await deleteProject(deletedId);
+    setProjects((prev) => prev.filter((p) => p.id !== deletedId));
+    if (deletedId === id) {
+      router.push("/projects");
+      return;
+    }
+    setEditingProject(null);
+  }
+
+  function openEditProject(p: ProjectRow, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditingProject(p);
+    setEditModalOpen(true);
+  }
+
+  function openEditCurrentProject() {
+    if (!project) return;
+    setEditingProject(project);
+    setEditModalOpen(true);
+  }
+
   async function sendChatMessage() {
     const text = chatInput.trim();
     if (pipelineMode === "summarize" && !selectedDocId) {
@@ -379,11 +406,7 @@ export default function ProjectDetailPage() {
             setChatError(detail);
           },
         },
-<<<<<<< HEAD
         { signal: controller.signal, mode: chatMode, pipelineMode, documentId: selectedDocId },
-=======
-        { signal: controller.signal, mode: chatMode },
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
       );
       await refreshMessages();
     } catch (err) {
@@ -528,7 +551,20 @@ export default function ProjectDetailPage() {
 
       <div className="app-proj-hdr">
         <div>
-          <div className="app-proj-title">{project?.name ?? "…"}</div>
+          <div className="flex items-center gap-2">
+            <div className="app-proj-title">{project?.name ?? "…"}</div>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="size-7 shrink-0"
+              aria-label="Edit project name"
+              onClick={openEditCurrentProject}
+              disabled={!project}
+            >
+              <Pencil className="size-3.5" />
+            </Button>
+          </div>
           <div className="app-proj-meta">
             {indexedCount} indexed · {docs.length} documents · updated {lastUpdatedIso ? formatShortDate(lastUpdatedIso) : "—"}
           </div>
@@ -559,11 +595,15 @@ export default function ProjectDetailPage() {
               <span style={{ color: "var(--color-accent)" }}>+</span> New project
             </Link>
             {projects.map((p, i) => (
-              <Link key={p.id} href={`/projects/${p.id}`} className={`mock-proj-row ${p.id === id ? "is-active" : ""}`}>
-                <span className="mock-proj-ico">{PROJECT_EMOJIS[i % PROJECT_EMOJIS.length]}</span>
-                <span className="mock-proj-name">{p.name}</span>
-                <span className="mock-proj-cnt">{p.id === id ? docs.length : "—"}</span>
-              </Link>
+              <ProjectSidebarRow
+                key={p.id}
+                name={p.name}
+                emoji={PROJECT_EMOJIS[i % PROJECT_EMOJIS.length]}
+                href={`/projects/${p.id}`}
+                active={p.id === id}
+                count={p.id === id ? docs.length : "—"}
+                onEdit={(e) => openEditProject(p, e)}
+              />
             ))}
             <div style={{ height: 0.5, background: "var(--color-border)", margin: "8px 12px" }} />
             <div style={{ padding: "8px 12px", marginTop: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
@@ -648,45 +688,6 @@ export default function ProjectDetailPage() {
           <div className="mock-ws-chat flex min-h-0 flex-col">
             <div className="mock-chat-hdr">
               <span>Chat</span>
-<<<<<<< HEAD
-              <PipelineModeDropdown
-                pipelineMode={pipelineMode}
-                chatMode={chatMode}
-                topKLabel={pipelineTopKLabel()}
-                disabled={sending}
-                onPipelineChange={setPipelineMode}
-                onChatModeChange={setChatMode}
-              />
-            </div>
-            <div className="mock-chat-hint border-b px-3 py-2">
-              <Badge variant="outline" className="max-w-full truncate font-mono text-[10px] font-normal">
-                {pipelineHint()}
-              </Badge>
-=======
-              <div className="mock-set-nav" style={{ marginLeft: "auto", marginRight: 8 }}>
-                <button
-                  type="button"
-                  className={chatMode === "fast" ? "is-on" : ""}
-                  onClick={() => setChatMode("fast")}
-                  disabled={sending}
-                  title="Fast mode: fewer chunks, lower latency"
-                >
-                  Fast
-                </button>
-                <button
-                  type="button"
-                  className={chatMode === "deep" ? "is-on" : ""}
-                  onClick={() => setChatMode("deep")}
-                  disabled={sending}
-                  title="Deep mode: more context, slower"
-                >
-                  Deep
-                </button>
-              </div>
-              <span style={{ fontSize: 9, fontFamily: "var(--font-mono)", color: "var(--color-text-muted)" }}>
-                {chatMode === "fast" ? "top-k 3" : "top-k 10"}
-              </span>
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
             </div>
 
             <ScrollArea className="mock-chat-scroll">
@@ -712,7 +713,7 @@ export default function ProjectDetailPage() {
                     <div className="mock-mbody">
                       <div className="mock-mmeta flex flex-wrap items-center gap-2">
                         <span>
-                          Arxiv · {formatTime(m.created_at)} · {m.citations?.length ?? 0} sources
+                          Research Assistant · {formatTime(m.created_at)} · {m.citations?.length ?? 0} sources
                           {m.meta?.refined ? " · refined" : m.meta?.mode === "fast" ? " · fast" : m.meta?.mode === "deep" ? " · deep" : ""}
                         </span>
                         {m.meta?.mode === "fast" && !m.meta?.refined && pipelineMode === "qa" ? (
@@ -745,7 +746,7 @@ export default function ProjectDetailPage() {
                   <div className="mock-mav ai">A</div>
                   <div className="mock-mbody">
                     <div className="mock-mmeta">
-                      Arxiv · {chatStageLabel(streamDraft.stage, streamDraft.statusMessage)}
+                      Research Assistant · {chatStageLabel(streamDraft.stage, streamDraft.statusMessage)}
                       {streamDraft.citations.length > 0 ? ` · ${streamDraft.citations.length} sources` : ""}
                       {streamDraft.latencyMs ? ` · ${formatLatencySummary(streamDraft.latencyMs)}` : ""}
                     </div>
@@ -774,6 +775,19 @@ export default function ProjectDetailPage() {
 
             <div className="mock-inp-area border-t bg-background/80 p-3 backdrop-blur-sm">
               <div className="chat-composer">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <PipelineModeDropdown
+                  pipelineMode={pipelineMode}
+                  chatMode={chatMode}
+                  topKLabel={pipelineTopKLabel()}
+                  disabled={sending}
+                  onPipelineChange={setPipelineMode}
+                  onChatModeChange={setChatMode}
+                />
+                <Badge variant="outline" className="max-w-full truncate font-mono text-[10px] font-normal">
+                  {pipelineHint()}
+                </Badge>
+              </div>
               {chatError ? <p className="mb-2 font-mono text-xs text-destructive">{chatError}</p> : null}
               <div className="flex items-end gap-2">
                 <Textarea
@@ -786,7 +800,6 @@ export default function ProjectDetailPage() {
                   disabled={sending}
                 />
                 {sending ? (
-<<<<<<< HEAD
                   <Button type="button" variant="outline" size="sm" onClick={stopChatMessage}>
                     <Square className="size-3.5 fill-current" />
                     Stop
@@ -801,18 +814,6 @@ export default function ProjectDetailPage() {
                 >
                   <Send className="size-4" />
                 </Button>
-=======
-                  <button type="button" className="mock-btn-ghost" style={{ flexShrink: 0, padding: "6px 10px" }} onClick={stopChatMessage}>
-                    Stop
-                  </button>
-                ) : null}
-                <button type="button" className="mock-snd" aria-label="Send" disabled={sending || !chatInput.trim()} onClick={() => void sendChatMessage()}>
-                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="2" y1="14" x2="14" y2="2" />
-                    <polyline points="6 2 14 2 14 10" />
-                  </svg>
-                </button>
->>>>>>> 3fe2a911b4c0b85b3a0bf6e7135ee335c854b4db
               </div>
               <div className="mt-2 flex items-center justify-between text-[10px] font-mono text-muted-foreground">
                 <span>⏎ send · shift+⏎ newline</span>
@@ -826,6 +827,20 @@ export default function ProjectDetailPage() {
           </div>
         </div>
       </div>
+
+      <ProjectEditModal
+        open={editModalOpen}
+        title="Edit project"
+        description="Rename or delete this project."
+        initialName={editingProject?.name ?? project?.name ?? ""}
+        submitLabel="Save"
+        onClose={() => {
+          setEditModalOpen(false);
+          setEditingProject(null);
+        }}
+        onSubmit={saveProjectName}
+        onDelete={editingProject || project ? removeProject : undefined}
+      />
     </div>
   );
 }

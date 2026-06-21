@@ -20,7 +20,7 @@ export function ArxivTopBar({ userInitials = "—", logoHref = "/projects" }: Ar
     <header className="mock-topbar">
       <Link href={logoHref} className="mock-logo transition-opacity hover:opacity-80" style={{ textDecoration: "none", color: "inherit" }}>
         <span className="mock-dot" aria-hidden />
-        Arxiv
+        Research Assistant
       </Link>
       <Badge variant="outline" className="ml-auto font-mono text-[10px] font-normal">
         RAG · pgvector
