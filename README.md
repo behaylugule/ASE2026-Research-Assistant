@@ -71,11 +71,9 @@ See also [Pipeline modes guide](docs/PIPELINE_MODES.md).
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture diagrams (Mermaid) |
 | [docs/EVALUATION_RESULTS.md](docs/EVALUATION_RESULTS.md) | Fast vs Deep benchmark tables |
 
-**Before submitting:** replace `[Your Name]` in the report and presentation.
 
-**Export slides:** install [Marp for VS Code](https://marketplace.visualstudio.com/items?itemName=marp-team.marp-vscode), open `docs/PRESENTATION.md`, export to PDF or PowerPoint.
 
-**Export paper:**
+
 
 ```bash
 pandoc docs/PROJECT_REPORT.md -o PROJECT_REPORT.pdf --metadata title="ASE2026 Project Report"
