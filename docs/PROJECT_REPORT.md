@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **Author** | *[Your Name]* |
+| **Author** | *Behaylu Gebrekidan* |
 | **Course** | ASE2026 |
 | **Date** | June 2026 |
 | **Repository** | ASE2026 |
